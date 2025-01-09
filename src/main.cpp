@@ -2,7 +2,7 @@
 #include <WiFi.h>
 
 #include "pico/cyw43_arch.h"
-
+#include <WiFi.h>
 #include <Wire.h>
 #include <VL53L0X.h>
 
@@ -23,6 +23,15 @@
 #define BUTTON_START 10  // Pin for start button
 
 VL53L0X tof;
+
+// Web server on port 80
+WiFiServer server(80);
+
+// WiFi credentials
+const char* ssid = "NOS-676B";       // Replace with your WiFi SSID
+const char* password = "L4N9U7JC"; // Replace with your WiFi password
+
+WiFiClient currentClient = server.available();
 
 // Time variables
 unsigned long currentMicros, previousMicros, interval;
@@ -103,9 +112,31 @@ void setup() {
 
   // Start new distance measure
   tof.startReadRangeMillimeters();  
+
+  // Initialize WiFi
+  Serial.print("Connecting to WiFi");
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi connected.");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  // Start the server
+  server.begin();
 }
 
 void loop() {
+
+  if(!currentClient){
+    currentClient = server.available();
+    if (currentClient) {
+      Serial.println("Client connected.");
+    }
+  }
+
   currentMicros = micros();
 
   ch1 = digitalRead(CHANNEL_1);
@@ -122,27 +153,25 @@ void loop() {
       prev_sensorDist = sensorDist;
       sensorDist = tof.readRangeMillimeters() * 1e-3;
     }
+    tof.startReadRangeMillimeters();
 
     displayInfo();
   }
 }
 
 void displayInfo() {
-    Serial.print("encoder1: ");
-    Serial.print(posi1);
-    Serial.print(", encoder2: ");
-    Serial.println(posi2);
 
-    Serial.print("Channels: ");
-    Serial.print(ch1);
-    Serial.print(ch2);
-    Serial.print(ch3);
-    Serial.print(ch4);
-    Serial.print(ch5);
+    String line1 = "encoder1: " + String(posi1) + ", encoder2: " + String(posi2);
+    String line2 = "Channel: " + String(ch1) + String(ch2) + String(ch3) + String(ch4) + String(ch5);
+    String line3 = "Dist: " + String(sensorDist, 3) + " m";
 
-    Serial.print(" Dist: ");
-    Serial.print(sensorDist, 3);
-    Serial.println();
+    Serial.println(line1);
+    Serial.println(line2);
+    Serial.println(line3);
+
+    currentClient.println(line1);
+    currentClient.println(line2);
+    currentClient.println(line3);
 }
 
 void controlCar() {
