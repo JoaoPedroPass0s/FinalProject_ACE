@@ -1,4 +1,10 @@
 #include <Arduino.h>
+#include <WiFi.h>
+
+#include "pico/cyw43_arch.h"
+
+#include <Wire.h>
+#include <VL53L0X.h>
 
 #define ENCA1 18   // Encoder A for motor 1
 #define ENCB1 17   // Encoder B for motor 1
@@ -16,16 +22,29 @@
 
 #define BUTTON_START 10  // Pin for start button
 
+VL53L0X tof;
+
+// Time variables
+unsigned long currentMicros, previousMicros, interval;
+
+//Distance sensor variables
+float sensorDist, prev_sensorDist;
+
+// Line following Sensor variables
+int ch1, ch2, ch3, ch4, ch5;
+
+// Encoder variables
+volatile int posi1 = 0; // Encoder position for motor 1
+volatile int posi2 = 0; // Encoder position for motor 2
+
 const int BASE_SPEED = 100;  // Base speed for the motors (range: 0-255 for PWM)
 const float Kp = 20.0;       // Proportional gain
 
-volatile int posi1 = 0; // Encoder position for motor 1
-volatile int posi2 = 0; // Encoder position for motor 2
 long prevT = 0;
 float eprev1 = 0, eprev2 = 0;
 float eintegral1 = 0, eintegral2 = 0;
 
-bool running = false; // Flag to indicate if the robot is moving
+bool running = true; // Flag to indicate if the robot is moving
 
 // Define waypoints (target positions)
 int waypoints[] = {0, 500, 0, 500, 0}; // Add more points as needed
@@ -35,9 +54,14 @@ int currentWaypoint = 0; // Index to track current target position
 void setMotor(int dir, int pwmVal, int in1, int in2);
 void readEncoder1();
 void readEncoder2();
+void controlCar();
+void displayInfo();
 
 void setup() {
   Serial.begin(9600);
+
+  interval = 400000;
+
   pinMode(ENCA1, INPUT);
   pinMode(ENCB1, INPUT);
   pinMode(ENCA2, INPUT);
@@ -62,13 +86,66 @@ void setup() {
 
   setMotor(0, 0, D0, D1);
   setMotor(0, 0, D2, D3);   
+
+  Wire.setSDA(20);
+  Wire.setSCL(21);
+
+  Wire.begin();
+
+  tof.setTimeout(500);
+  while (!tof.init()) {
+    Serial.println(F("Failed to detect and initialize VL53L0X!"));
+    delay(100);
+  }  
+
+  // Reduce timing budget to 20 ms (default is about 33 ms)
+  //tof.setMeasurementTimingBudget(20000);
+
+  // Start new distance measure
+  tof.startReadRangeMillimeters();  
 }
 
 void loop() {
+  currentMicros = micros();
 
-  if(digitalRead(BUTTON_START) == LOW){
-    running = !running;
+  ch1 = digitalRead(CHANNEL_1);
+  ch2 = digitalRead(CHANNEL_2);
+  ch3 = digitalRead(CHANNEL_3);
+  ch4 = digitalRead(CHANNEL_4);
+  ch5 = digitalRead(CHANNEL_5);
+
+  if (currentMicros - previousMicros >= interval) {
+    previousMicros = currentMicros;
+
+    // Read sensor distance
+    if (tof.readRangeAvailable()) {
+      prev_sensorDist = sensorDist;
+      sensorDist = tof.readRangeMillimeters() * 1e-3;
+    }
+
+    displayInfo();
   }
+}
+
+void displayInfo() {
+    Serial.print("encoder1: ");
+    Serial.print(posi1);
+    Serial.print(", encoder2: ");
+    Serial.println(posi2);
+
+    Serial.print("Channels: ");
+    Serial.print(ch1);
+    Serial.print(ch2);
+    Serial.print(ch3);
+    Serial.print(ch4);
+    Serial.print(ch5);
+
+    Serial.print(" Dist: ");
+    Serial.print(sensorDist, 3);
+    Serial.println();
+}
+
+void controlCar() {
 
   // Read digital values from each channel
   int s1 = digitalRead(CHANNEL_1);
