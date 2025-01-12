@@ -1,7 +1,7 @@
 import socket
 
 # Replace with the Pico W's IP address from Serial Monitor
-PICO_IP = "192.168.1.7"  # Replace with your Pico W's IP address
+PICO_IP = "192.168.1.6"  # Replace with your Pico W's IP address
 PORT = 80
 
 def main():

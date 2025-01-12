@@ -7,6 +7,7 @@
 #include "robot.h"
 #include <RPi_Pico_TimerInterrupt.h>
 
+#define CYW43_WL_GPIO_LED_PIN 0
 #define TEST_PIN 27
 #define ENCA1 18   // Encoder A for motor 1
 #define ENCB1 17   // Encoder B for motor 1
@@ -38,6 +39,9 @@ WiFiServer server(80);
 
 // Init RPI_PICO_Timer
 RPI_PICO_Timer ITimer1(1);
+
+int LED_state;
+int ledCount = 0;
 
 // WiFi credentials
 const char* ssid = "NOS-676B";       // Replace with your WiFi SSID
@@ -74,9 +78,12 @@ void read_encoders();
 bool timer_handler(struct repeating_timer *t);
 void displayInfo();
 void controlRobot();
+void updateVoltage();
 
 void setup() {
   Serial.begin(9600);
+
+  analogReadResolution(12); // Set ADC resolution to 12 bits
 
   interval = 400000;
 
@@ -151,13 +158,13 @@ void loop() {
     }
   }
 
-  currentMicros = millis();
-
   ch1 = digitalRead(CHANNEL_1);
   ch2 = digitalRead(CHANNEL_2);
   ch3 = digitalRead(CHANNEL_3);
   ch4 = digitalRead(CHANNEL_4);
   ch5 = digitalRead(CHANNEL_5);
+  
+  currentMicros = millis();
 
   if ((currentMicros - previousMicros) >= 2000) {
     previousMicros = currentMicros;
@@ -165,7 +172,20 @@ void loop() {
     displayInfo();
   }
 
-  controlRobot();
+  updateVoltage();
+
+  if(robot.battery_voltage < 6.0){
+    robot.PWM_1 = 0;
+    robot.PWM_2 = 0;
+    setMotorPWM(robot.PWM_1, D1, D0);
+    setMotorPWM(robot.PWM_2, D3, D2);
+    if(currentMicros % 500 == 0){
+      LED_state = !LED_state;
+      cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, LED_state);
+    }
+  }else{
+    controlRobot();
+  }
 }
 
 float previous_error = 0; // For PID control
@@ -206,7 +226,7 @@ void controlRobot(){
     robot.enc1 = enc1;
     robot.enc2 = enc2;
     robot.odometry();
-    robot.battery_voltage = 7.4; // it really shoud be measured...
+    //robot.battery_voltage = 7.4; // it really shoud be measured...
 
     robot.control_mode = cm_pid;
 
@@ -242,17 +262,27 @@ void displayInfo() {
     String line2 = "Channels: " + String(ch1) + String(ch2) + String(ch3) + String(ch4) + String(ch5);
     String line3 = "Dist: " + String(sensorDist, 3) + " m";
     String line4 = "Motor 1: " + String(robot.PWM_1) + ", Motor 2: " + String(robot.PWM_2);
+    String line5 = "Battery: " + String(robot.battery_voltage) + " V";
 
     Serial.println("Ip address: " + WiFi.localIP().toString());
     Serial.println(line1);
     Serial.println(line2);
     Serial.println(line3);
     Serial.println(line4);
+    Serial.println(line5);
 
     currentClient.println(line1);
     currentClient.println(line2);
     currentClient.println(line3);
     currentClient.println(line4);
+    currentClient.println(line5);
+}
+
+void updateVoltage() {
+  int value = analogRead(A0);
+  float v_out = (value * 3.3f) / 4095.0f;
+  float v_in = v_out * (330000.0f + 100000.0f) / 100000.0f;
+  robot.battery_voltage = v_in;
 }
 
 void setMotorPWM(int new_PWM, int pin_a, int pin_b)
