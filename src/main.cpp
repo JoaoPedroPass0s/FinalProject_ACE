@@ -172,6 +172,14 @@ void loop() {
     displayInfo();
   }
 
+  if(currentMicros % 40){
+    if (tof.readRangeAvailable()) {
+      prev_sensorDist = sensorDist;
+      sensorDist = tof.readRangeMillimeters() * 1e-3;
+    }
+    tof.startReadRangeMillimeters();
+  }
+
   updateVoltage();
 
   if(robot.battery_voltage < 6.0){
@@ -195,6 +203,7 @@ float I = 0; // Integral term
 void controlRobot(){
 
   unsigned long now = millis();
+  
 
   if (now - last_cycle > interval) {
     loop_micros = micros();
@@ -260,7 +269,7 @@ void displayInfo() {
 
     String line1 = "encoder1: " + String(enc1) + ", encoder2: " + String(enc2);
     String line2 = "Channels: " + String(ch1) + String(ch2) + String(ch3) + String(ch4) + String(ch5);
-    String line3 = "Dist: " + String(sensorDist, 3) + " m";
+    String line3 = "Dist: " + String(sensorDist, 5) + " m";
     String line4 = "Motor 1: " + String(robot.PWM_1) + ", Motor 2: " + String(robot.PWM_2);
     String line5 = "Battery: " + String(robot.battery_voltage) + " V";
 
