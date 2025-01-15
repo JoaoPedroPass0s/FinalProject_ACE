@@ -14,14 +14,15 @@ def update_display(data, labels):
         if i < len(labels):
             labels[i].config(text=line)
 
-def send_pid_values(client_socket, Kp, Ki, Kd):
+def send_pid_values(client_socket, Kp, Ki, Kd,vel):
     """
     Sends the PID values to the Pico W over the socket connection.
     """
     try:
-        pid_data = f"{Kp},{Ki},{Kd}\n"  # Format the PID values as a string
+        pid_data = f"{Kp},{Ki},{Kd},{vel}\n"  # Format the PID values as a string
         client_socket.send(pid_data.encode())  # Send the data to the Pico W
         print(f"Sent PID values: Kp={Kp}, Ki={Ki}, Kd={Kd}")
+        print(f"Send velocity: {vel}")
     except Exception as e:
         print(f"Error sending PID values: {e}")
 
@@ -36,9 +37,10 @@ def main():
         label.pack(fill="x", padx=10, pady=5)
 
     # Create sliders for Kp, Ki, and Kd
-    Kp_var = tk.DoubleVar(value=40.0)
-    Ki_var = tk.DoubleVar(value=0.2)
-    Kd_var = tk.DoubleVar(value=0.1)
+    Kp_var = tk.DoubleVar(value=75.0)
+    Ki_var = tk.DoubleVar(value=0.68)
+    Kd_var = tk.DoubleVar(value=0.9)
+    Vel_var = tk.DoubleVar(value=2.0)
 
     # Create a TCP socket
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
@@ -50,21 +52,25 @@ def main():
 
             # Function to send updated PID values
             def pid_updated(*args):
-                send_pid_values(client_socket, Kp_var.get(), Ki_var.get(), Kd_var.get())
+                send_pid_values(client_socket, Kp_var.get(), Ki_var.get(), Kd_var.get(),Vel_var.get())
 
             # Trace changes to the variables
             Kp_var.trace_add("write", pid_updated)
             Ki_var.trace_add("write", pid_updated)
             Kd_var.trace_add("write", pid_updated)
+            Vel_var.trace_add("write",pid_updated)
 
-            Kp_slider = tk.Scale(root, from_=0, to_=100, resolution=0.01, orient="horizontal", label="Kp", variable=Kp_var)
+            Kp_slider = tk.Scale(root, from_=0, to_=200, resolution=0.01, orient="horizontal", label="Kp", variable=Kp_var)
             Kp_slider.pack(fill="x", padx=10, pady=5)
 
-            Ki_slider = tk.Scale(root, from_=0, to_=10, resolution=0.01, orient="horizontal", label="Ki", variable=Ki_var)
+            Ki_slider = tk.Scale(root, from_=0, to_=20, resolution=0.01, orient="horizontal", label="Ki", variable=Ki_var)
             Ki_slider.pack(fill="x", padx=10, pady=5)
 
-            Kd_slider = tk.Scale(root, from_=0, to_=10, resolution=0.01, orient="horizontal", label="Kd", variable=Kd_var)
+            Kd_slider = tk.Scale(root, from_=0, to_=20, resolution=0.01, orient="horizontal", label="Kd", variable=Kd_var)
             Kd_slider.pack(fill="x", padx=10, pady=5)
+
+            Vel_slider = tk.Scale(root, from_=0, to_=5, resolution=0.01, orient="horizontal", label="Velocity", variable=Vel_var)
+            Vel_slider.pack(fill="x", padx=10, pady=5)
 
             # Receive data from the server
             def receive_data():
@@ -85,7 +91,7 @@ def main():
 
             receive_data()
             # Initial send of PID values to Pico W
-            send_pid_values(client_socket, Kp_var.get(), Ki_var.get(), Kd_var.get())
+            send_pid_values(client_socket, Kp_var.get(), Ki_var.get(), Kd_var.get(),Vel_var.get())
             root.mainloop()
 
         except Exception as e:

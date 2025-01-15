@@ -96,6 +96,8 @@ unsigned long turn_time;
 
 float kp = 75.0, ki = 0.68, kd = 0.9;
 
+float v = 2;
+
 void setMotorPWM(int new_PWM, int pin_a, int pin_b);
 void read_encoders();
 bool timer_handler(struct repeating_timer *t);
@@ -365,22 +367,26 @@ void receiveData() {
         // Parse the incoming data as Kp, Ki, Kd
         int kpIndex = data.indexOf(',');
         int kiIndex = data.indexOf(',', kpIndex + 1);
+        int VelIndex = data.indexOf(',', kiIndex + 1);
 
         if (kpIndex > 0 && kiIndex > kpIndex) {
             // Extract Kp, Ki, Kd values from the string
             String kpStr = data.substring(0, kpIndex);
             String kiStr = data.substring(kpIndex + 1, kiIndex);
             String kdStr = data.substring(kiIndex + 1);
+            String velStr = data.substring(VelIndex + 1);
 
             // Convert strings to floats and update PID values
             kp = kpStr.toFloat();
             ki = kiStr.toFloat();
             kd = kdStr.toFloat();
+            v = velStr.toFloat();
 
             Serial.println("Updated PID values:");
             Serial.println("Kp: " + String(kp));
             Serial.println("Ki: " + String(ki));
             Serial.println("Kd: " + String(kd));
+            Serial.println("Velocity: " + String(v));
         } else {
             Serial.println("Invalid data received: " + data);
         }
@@ -410,7 +416,7 @@ void followLinePID(){
 
   robot.control_mode = cm_pid;
 
-  setRobotVW(2, w_req);
+  setRobotVW(v, w_req);
 }
 
 void updateVoltage() {
