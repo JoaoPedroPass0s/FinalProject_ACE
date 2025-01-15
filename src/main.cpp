@@ -94,6 +94,8 @@ int act_count;
 unsigned long interval, last_cycle;
 unsigned long turn_time;
 
+float kp = 75.0, ki = 0.68, kd = 0.9;
+
 void setMotorPWM(int new_PWM, int pin_a, int pin_b);
 void read_encoders();
 bool timer_handler(struct repeating_timer *t);
@@ -104,6 +106,7 @@ void set_state(fsm_t& fsm, int new_state);
 void setRobotVW(float Vnom, float Wnom);
 void followLinePID();
 void followEllipse(float a, float b, float theta);
+void receiveData();
 
 void setup() {
   Serial.begin(9600);
@@ -192,6 +195,11 @@ void loop() {
   ch5 = digitalRead(CHANNEL_5);
   
   currentMicros = millis();
+
+  // Call receiveData
+  if (currentClient) {
+    receiveData();
+  }
 
   displayInfo();
 
@@ -325,7 +333,7 @@ void displayInfo() {
     String line4 = "Motor 1: " + String(robot.PWM_1) + ", Motor 2: " + String(robot.PWM_2);
     String line5 = "Battery: " + String(robot.battery_voltage) + " V";
     String line6 = "State: " + String(fsm.state);
-    String line7 = "Angular velocity: " + String(angularVel, 5);
+    String line7 = "Kp,Ki,Kd: " + String(kp) + "," + String(ki) + "," + String(kd) ;
 
     if (currentMicros % 2000 == 0) {
       Serial.println("Ip address: " + WiFi.localIP().toString());
@@ -349,6 +357,36 @@ void displayInfo() {
     }
 }
 
+void receiveData() {
+    if (currentClient.available()) {
+        String data = currentClient.readStringUntil('\n'); // Read data until newline character
+        Serial.println("Received data: " + data);          // Debug: Print the received data
+
+        // Parse the incoming data as Kp, Ki, Kd
+        int kpIndex = data.indexOf(',');
+        int kiIndex = data.indexOf(',', kpIndex + 1);
+
+        if (kpIndex > 0 && kiIndex > kpIndex) {
+            // Extract Kp, Ki, Kd values from the string
+            String kpStr = data.substring(0, kpIndex);
+            String kiStr = data.substring(kpIndex + 1, kiIndex);
+            String kdStr = data.substring(kiIndex + 1);
+
+            // Convert strings to floats and update PID values
+            kp = kpStr.toFloat();
+            ki = kiStr.toFloat();
+            kd = kdStr.toFloat();
+
+            Serial.println("Updated PID values:");
+            Serial.println("Kp: " + String(kp));
+            Serial.println("Ki: " + String(ki));
+            Serial.println("Kd: " + String(kd));
+        } else {
+            Serial.println("Invalid data received: " + data);
+        }
+    }
+}
+
 void followLinePID(){
   
   // Calculate line position
@@ -363,7 +401,6 @@ void followLinePID(){
 
   // PID control for angular velocity
   float error = line_position;
-  float kp = 40.0, ki = 0.2, kd = 0.1;
 
   float P = kp * error;
   I += ki * error * interval / 1000.0; // Integral term
@@ -373,7 +410,7 @@ void followLinePID(){
 
   robot.control_mode = cm_pid;
 
-  setRobotVW(1, w_req);
+  setRobotVW(2, w_req);
 }
 
 void updateVoltage() {
