@@ -103,7 +103,7 @@ void updateVoltage();
 void set_state(fsm_t& fsm, int new_state);
 void setRobotVW(float Vnom, float Wnom);
 void followLinePID();
-float calculateMoveTime(float turn_time);
+void followEllipse(float a, float b, float theta);
 
 void setup() {
   Serial.begin(9600);
@@ -230,41 +230,61 @@ void set_state(fsm_t& fsm, int new_state)
   }
 }
 
-float calculateMoveTime(float turn_time){
-  float distance = 0.1; // 10 cm
-  float angular_speed = 0.25; // 0.5 rad/s
-  float angle = angular_speed * (turn_time / 1000);
-  float moveDistance = distance / cos(angle);
-  float move_time = moveDistance / 0.04;
-  return move_time * 1000;
+void followEllipse(float a, float b, float theta)
+{
+  // Calculate the robot's velocity in x and y directions
+  float vx = -a * sin(theta);
+  float vy = b * cos(theta);
+
+  float maxVel = sqrt((a * a) + (b * b));
+  
+  // Calculate the linear velocity (magnitude of velocity vector)
+  float v = sqrt(vx * vx + vy * vy);
+
+  // Calculate the angular velocity (how fast the robot is turning)
+  float w = (vy * a - vx * b) / (a * b); // This is the angular velocity around the object
+  
+    // Calculate velocities for the left and right wheels
+  float v1 = v - (w * 0.105 / 2);  // Left wheel velocity
+  float v2 = v + (w * 0.105 / 2);  // Right wheel velocity
+  
+  // Convert wheel velocities to PWM values
+  float PWM_1 = (v1 * 255) / maxVel;  // Normalize to PWM range (0-255)
+  float PWM_2 = (v2 * 255) / maxVel;  // Normalize to PWM range (0-255)
+
+  // Ensure PWM values are within the allowed range
+  PWM_1 = constrain(PWM_1, 0, 255);
+  PWM_2 = constrain(PWM_2, 0, 255);
+
+  // Set the motor PWM for left and right motors
+  setMotorPWM(PWM_1, D1, D0);  // Set PWM for left motor
+  setMotorPWM(PWM_2, D3, D2);  // Set PWM for right motor
 }
 
 float previous_error = 0; // For PID control
 
 float I = 0; // Integral term
 
-float moveTime = 0;
-int objAvoidVel = 80;
+float angularVel = 0;
+int objAvoidVel = 150;
 
 void controlRobotStm() {
   fsm.tis = millis();
 
   // State transitions
-  if (fsm.state == sm1_lineFollowing && sensorDist < 0.1) {
+  if ((fsm.state == sm1_lineFollowing || fsm.state == sm1_move1 || fsm.state == sm1_turn2) && sensorDist < 0.1) {
     fsm.new_state = sm1_turn1; // Start turning
   } else if (fsm.state == sm1_turn1 && sensorDist > 0.15) {
     turn_time = fsm.tis - fsm.tes; // Record turn time
     fsm.new_state = sm1_adjust1; // Move to adjust state
-  } else if (fsm.state == sm1_adjust1 && (fsm.tis - fsm.tes) > 500) {
+  } else if (fsm.state == sm1_adjust1 && (fsm.tis - fsm.tes) > 300) {
     turn_time += fsm.tis - fsm.tes; // Update turn time
     fsm.new_state = sm1_move1; // Move forward slightly
-    moveTime = calculateMoveTime(turn_time);
-  } else if (fsm.state == sm1_move1 && fsm.tis - fsm.tes > moveTime) {
-    fsm.new_state = sm1_turn2; // Start the half-circle movement
-  } else if (fsm.state == sm1_turn2 && fsm.tis - fsm.tes > turn_time + 200) {
-    fsm.new_state = sm1_move2; // Move forward after the half-circle
-  } else if (fsm.state == sm1_move2 && ((!ch1) || (!ch2) || (!ch3) || (!ch4) || (!ch5))) {
-    fsm.new_state = sm1_lineFollowing; // Resume line-following when the line is detected
+    angularVel = robot.we;
+  } else if (fsm.state == sm1_move1 && ((!ch1) || (!ch2) || (!ch3) || (!ch4) || (!ch5))) {
+    fsm.new_state = sm1_turn2; // Resume line-following when the line is detected
+  } else if(fsm.state == sm1_turn2 && fsm.tis - fsm.tes > (turn_time/2)){
+    fsm.new_state = sm1_lineFollowing;
   }
 
   set_state(fsm, fsm.new_state);
@@ -282,14 +302,12 @@ void controlRobotStm() {
       setMotorPWM(objAvoidVel, D1, D0); // Turn in place
       setMotorPWM(-objAvoidVel, D3, D2);
     } else if (fsm.state == sm1_move1) {
+      float angle = angularVel * (turn_time/1000);
+      float b = 0.12 / cos(angle);
+      followEllipse(0.12, b, angle); // Move forward slightly
+    }else if(fsm.state == sm1_turn2){
       setMotorPWM(objAvoidVel, D1, D0); // Turn in place
-      setMotorPWM(objAvoidVel, D3, D2);
-    } else if (fsm.state == sm1_turn2) {
-      setMotorPWM(-objAvoidVel, D1, D0); // Turn in place
-      setMotorPWM(objAvoidVel, D3, D2);
-    } else if (fsm.state == sm1_move2) {
-      setMotorPWM(objAvoidVel, D1, D0); // Turn in place
-      setMotorPWM(objAvoidVel, D3, D2);
+      setMotorPWM(-objAvoidVel, D3, D2);
     }
   }
 
@@ -307,7 +325,7 @@ void displayInfo() {
     String line4 = "Motor 1: " + String(robot.PWM_1) + ", Motor 2: " + String(robot.PWM_2);
     String line5 = "Battery: " + String(robot.battery_voltage) + " V";
     String line6 = "State: " + String(fsm.state);
-    String line7 = "Angular velocity: " + String(robot.we);
+    String line7 = "Angular velocity: " + String(angularVel, 5);
 
     if (currentMicros % 2000 == 0) {
       Serial.println("Ip address: " + WiFi.localIP().toString());
@@ -352,13 +370,6 @@ void followLinePID(){
   float D = kd * (error - previous_error) / (interval / 1000.0); // Derivative term
   float w_req = P + I + D;
   previous_error = error;
-
-  // Read and process sensors
-  read_encoders();
-  robot.enc1 = enc1;
-  robot.enc2 = enc2;
-  robot.odometry();
-  //robot.battery_voltage = 7.4; // it really shoud be measured...
 
   robot.control_mode = cm_pid;
 
