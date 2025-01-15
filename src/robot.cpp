@@ -65,7 +65,6 @@ void robot_t::odometry(void)
   rel_theta += dtheta;
 }
 
-
 void robot_t::setRobotVW(float Vnom, float Wnom)
 {
   v_req = Vnom;

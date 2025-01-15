@@ -30,6 +30,16 @@
 
 #define pinIsHigh(pin, pins)        (((1 << pin) & pins) >> pin)
 
+// fsm1 states
+enum {
+  sm1_lineFollowing = 0,
+  sm1_turn1,
+  sm1_adjust1,
+  sm1_move1,
+  sm1_turn2,
+  sm1_move2,
+};
+
 VL53L0X tof;
 
 robot_t robot;
@@ -39,6 +49,17 @@ WiFiServer server(80);
 
 // Init RPI_PICO_Timer
 RPI_PICO_Timer ITimer1(1);
+
+typedef struct {
+  int state, new_state;
+
+  // tes - time entering state
+  // tis - time in state
+  // tup - time since last update
+  unsigned long tes, tis, tup;
+} fsm_t;
+
+fsm_t fsm;
 
 int LED_state;
 int ledCount = 0;
@@ -71,14 +92,18 @@ volatile int count;
 int act_count;
 
 unsigned long interval, last_cycle;
-unsigned long loop_micros;
+unsigned long turn_time;
 
 void setMotorPWM(int new_PWM, int pin_a, int pin_b);
 void read_encoders();
 bool timer_handler(struct repeating_timer *t);
 void displayInfo();
-void controlRobot();
+void controlRobotStm();
 void updateVoltage();
+void set_state(fsm_t& fsm, int new_state);
+void setRobotVW(float Vnom, float Wnom);
+void followLinePID();
+float calculateMoveTime(float turn_time);
 
 void setup() {
   Serial.begin(9600);
@@ -145,6 +170,8 @@ void setup() {
   robot.PID1.dt = robot.dt;
   robot.PID2.dt = robot.dt;
 
+  set_state(fsm, sm1_lineFollowing); 
+
   Serial.println("Starting path following...");
 
 }
@@ -166,11 +193,7 @@ void loop() {
   
   currentMicros = millis();
 
-  if ((currentMicros - previousMicros) >= 2000) {
-    previousMicros = currentMicros;
-
-    displayInfo();
-  }
+  displayInfo();
 
   if(currentMicros % 40){
     if (tof.readRangeAvailable()) {
@@ -192,77 +215,88 @@ void loop() {
       cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, LED_state);
     }
   }else{
-    controlRobot();
+    controlRobotStm();
   }
+}
+
+// Set new state
+void set_state(fsm_t& fsm, int new_state)
+{
+  if (fsm.state != new_state) {
+    fsm.state = new_state;
+    fsm.tes = millis();
+    fsm.tis = 0;
+    fsm.tup = millis();
+  }
+}
+
+float calculateMoveTime(float turn_time){
+  float distance = 0.1; // 10 cm
+  float angular_speed = 0.25; // 0.5 rad/s
+  float angle = angular_speed * (turn_time / 1000);
+  float moveDistance = distance / cos(angle);
+  float move_time = moveDistance / 0.04;
+  return move_time * 1000;
 }
 
 float previous_error = 0; // For PID control
 
 float I = 0; // Integral term
 
-void controlRobot(){
+float moveTime = 0;
+int objAvoidVel = 80;
 
-  unsigned long now = millis();
-  
+void controlRobotStm() {
+  fsm.tis = millis();
 
-  if (now - last_cycle > interval) {
-    loop_micros = micros();
-    //last_cycle = now;
-    last_cycle += interval;
-
-    // Calculate line position
-    int weights[5] = {-2, -1, 0, 1, 2};
-    float line_position = 0;
-    int total = ch1 + ch2 + ch3 + ch4 + ch5;
-
-    if (total > 0) {
-      line_position = (weights[0] * ch1 + weights[1] * ch2 + weights[2] * ch3 +
-                       weights[3] * ch4 + weights[4] * ch5) / (float)total;
-    }
-
-    // PID control for angular velocity
-    float error = line_position;
-    float kp = 40.0, ki = 0.2, kd = 0.1;
-
-    float P = kp * error;
-    I += ki * error * interval / 1000.0; // Integral term
-    float D = kd * (error - previous_error) / (interval / 1000.0); // Derivative term
-    float w_req = P + I + D;
-    previous_error = error;
-
-    // Read and process sensors
-    read_encoders();
-    robot.enc1 = enc1;
-    robot.enc2 = enc2;
-    robot.odometry();
-    //robot.battery_voltage = 7.4; // it really shoud be measured...
-
-    robot.control_mode = cm_pid;
-
-    // Calc outputs
-    robot.setRobotVW(1, w_req);
-    //robot.accelerationLimit();
-    robot.v = robot.v_req;
-    robot.w = robot.w_req;
-    robot.VWToMotorsVoltage();
-
-    setMotorPWM(robot.PWM_1, D1, D0);
-    setMotorPWM(robot.PWM_2, D3, D2);
+  // State transitions
+  if (fsm.state == sm1_lineFollowing && sensorDist < 0.1) {
+    fsm.new_state = sm1_turn1; // Start turning
+  } else if (fsm.state == sm1_turn1 && sensorDist > 0.15) {
+    turn_time = fsm.tis - fsm.tes; // Record turn time
+    fsm.new_state = sm1_adjust1; // Move to adjust state
+  } else if (fsm.state == sm1_adjust1 && (fsm.tis - fsm.tes) > 500) {
+    turn_time += fsm.tis - fsm.tes; // Update turn time
+    fsm.new_state = sm1_move1; // Move forward slightly
+    moveTime = calculateMoveTime(turn_time);
+  } else if (fsm.state == sm1_move1 && fsm.tis - fsm.tes > moveTime) {
+    fsm.new_state = sm1_turn2; // Start the half-circle movement
+  } else if (fsm.state == sm1_turn2 && fsm.tis - fsm.tes > turn_time + 200) {
+    fsm.new_state = sm1_move2; // Move forward after the half-circle
+  } else if (fsm.state == sm1_move2 && ((!ch1) || (!ch2) || (!ch3) || (!ch4) || (!ch5))) {
+    fsm.new_state = sm1_lineFollowing; // Resume line-following when the line is detected
   }
 
-  if (Serial.available() > 0 && false) {
-    // Wait for the user to input new PID values (e.g., "10.0 0.2 0.1")
-    String input = Serial.readStringUntil('\n');
-    float new_kp, new_ki, new_kd;
+  set_state(fsm, fsm.new_state);
 
-    // Parse the input into new PID values
-    int numValues = sscanf(input.c_str(), "%f %f %f", &new_kp, &new_ki, &new_kd);
-    if (numValues == 3) {
-      robot.tunePID(new_kp, new_ki, new_kd);
-    } else {
-      Serial.println("Invalid input, please enter three values for kp, ki, and kd.");
+  // State actions
+  if (fsm.tis - fsm.tup > interval) {
+    fsm.tup = fsm.tis;
+
+    if (fsm.state == sm1_lineFollowing) {
+      followLinePID();
+    } else if (fsm.state == sm1_turn1) {
+      setMotorPWM(objAvoidVel, D1, D0); // Turn in place
+      setMotorPWM(-objAvoidVel, D3, D2);
+    } else if (fsm.state == sm1_adjust1) {
+      setMotorPWM(objAvoidVel, D1, D0); // Turn in place
+      setMotorPWM(-objAvoidVel, D3, D2);
+    } else if (fsm.state == sm1_move1) {
+      setMotorPWM(objAvoidVel, D1, D0); // Turn in place
+      setMotorPWM(objAvoidVel, D3, D2);
+    } else if (fsm.state == sm1_turn2) {
+      setMotorPWM(-objAvoidVel, D1, D0); // Turn in place
+      setMotorPWM(objAvoidVel, D3, D2);
+    } else if (fsm.state == sm1_move2) {
+      setMotorPWM(objAvoidVel, D1, D0); // Turn in place
+      setMotorPWM(objAvoidVel, D3, D2);
     }
   }
+
+  read_encoders();
+  robot.enc1 = enc1;
+  robot.enc2 = enc2;
+  robot.odometry();
 }
 
 void displayInfo() {
@@ -272,19 +306,63 @@ void displayInfo() {
     String line3 = "Dist: " + String(sensorDist, 5) + " m";
     String line4 = "Motor 1: " + String(robot.PWM_1) + ", Motor 2: " + String(robot.PWM_2);
     String line5 = "Battery: " + String(robot.battery_voltage) + " V";
+    String line6 = "State: " + String(fsm.state);
+    String line7 = "Angular velocity: " + String(robot.we);
 
-    Serial.println("Ip address: " + WiFi.localIP().toString());
-    Serial.println(line1);
-    Serial.println(line2);
-    Serial.println(line3);
-    Serial.println(line4);
-    Serial.println(line5);
+    if (currentMicros % 2000 == 0) {
+      Serial.println("Ip address: " + WiFi.localIP().toString());
+      Serial.println(line1);
+      Serial.println(line2);
+      Serial.println(line3);
+      Serial.println(line4);
+      Serial.println(line5);
+      Serial.println(line6);
+      Serial.println(line7);
+    }  
 
-    currentClient.println(line1);
-    currentClient.println(line2);
-    currentClient.println(line3);
-    currentClient.println(line4);
-    currentClient.println(line5);
+    if(currentMicros % 200 == 0){
+      currentClient.println(line1);
+      currentClient.println(line2);
+      currentClient.println(line3);
+      currentClient.println(line4);
+      currentClient.println(line5);
+      currentClient.println(line6);
+      currentClient.println(line7);
+    }
+}
+
+void followLinePID(){
+  
+  // Calculate line position
+  int weights[5] = {-2, -1, 0, 1, 2};
+  float line_position = 0;
+  int total = ch1 + ch2 + ch3 + ch4 + ch5;
+
+  if (total > 0) {
+    line_position = (weights[0] * ch1 + weights[1] * ch2 + weights[2] * ch3 +
+                      weights[3] * ch4 + weights[4] * ch5) / (float)total;
+  }
+
+  // PID control for angular velocity
+  float error = line_position;
+  float kp = 40.0, ki = 0.2, kd = 0.1;
+
+  float P = kp * error;
+  I += ki * error * interval / 1000.0; // Integral term
+  float D = kd * (error - previous_error) / (interval / 1000.0); // Derivative term
+  float w_req = P + I + D;
+  previous_error = error;
+
+  // Read and process sensors
+  read_encoders();
+  robot.enc1 = enc1;
+  robot.enc2 = enc2;
+  robot.odometry();
+  //robot.battery_voltage = 7.4; // it really shoud be measured...
+
+  robot.control_mode = cm_pid;
+
+  setRobotVW(1, w_req);
 }
 
 void updateVoltage() {
@@ -292,6 +370,19 @@ void updateVoltage() {
   float v_out = (value * 3.3f) / 4095.0f;
   float v_in = v_out * (330000.0f + 100000.0f) / 100000.0f;
   robot.battery_voltage = v_in;
+}
+
+void setRobotVW(float Vnom, float Wnom)
+{
+  // Calc outputs
+  robot.setRobotVW(Vnom, Wnom);
+  //robot.accelerationLimit();
+  robot.v = robot.v_req;
+  robot.w = robot.w_req;
+  robot.VWToMotorsVoltage();
+
+  setMotorPWM(robot.PWM_1, D1, D0);
+  setMotorPWM(robot.PWM_2, D3, D2);
 }
 
 void setMotorPWM(int new_PWM, int pin_a, int pin_b)
