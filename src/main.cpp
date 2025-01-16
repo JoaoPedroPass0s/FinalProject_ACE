@@ -115,8 +115,6 @@ void setup() {
 
   analogReadResolution(12); // Set ADC resolution to 12 bits
 
-  interval = 400000;
-
   pinMode(ENCA1, INPUT);
   pinMode(ENCB1, INPUT);
   pinMode(ENCA2, INPUT);
@@ -336,6 +334,7 @@ void displayInfo() {
     String line5 = "Battery: " + String(robot.battery_voltage) + " V";
     String line6 = "State: " + String(fsm.state);
     String line7 = "Kp,Ki,Kd: " + String(kp) + "," + String(ki) + "," + String(kd) ;
+    String line8 = "Error: " + String(previous_error);
 
     if (currentMicros % 2000 == 0) {
       Serial.println("Ip address: " + WiFi.localIP().toString());
@@ -346,6 +345,7 @@ void displayInfo() {
       Serial.println(line5);
       Serial.println(line6);
       Serial.println(line7);
+      Serial.println(line8);
     }  
 
     if(currentMicros % 200 == 0){
@@ -356,6 +356,7 @@ void displayInfo() {
       currentClient.println(line5);
       currentClient.println(line6);
       currentClient.println(line7);
+      currentClient.println(line8);
     }
 }
 
@@ -367,14 +368,15 @@ void receiveData() {
         // Parse the incoming data as Kp, Ki, Kd
         int kpIndex = data.indexOf(',');
         int kiIndex = data.indexOf(',', kpIndex + 1);
-        int VelIndex = data.indexOf(',', kiIndex + 1);
+        int kdIndex = data.indexOf(',', kiIndex + 1);
+        int VelIndex = data.indexOf(',', kdIndex + 1);
 
         if (kpIndex > 0 && kiIndex > kpIndex) {
             // Extract Kp, Ki, Kd values from the string
             String kpStr = data.substring(0, kpIndex);
             String kiStr = data.substring(kpIndex + 1, kiIndex);
-            String kdStr = data.substring(kiIndex + 1);
-            String velStr = data.substring(VelIndex + 1);
+            String kdStr = data.substring(kiIndex + 1, kdIndex);
+            String velStr = data.substring(kdIndex + 1, VelIndex);
 
             // Convert strings to floats and update PID values
             kp = kpStr.toFloat();
@@ -398,13 +400,13 @@ void followLinePID(){
   // Calculate line position
   int weights[5] = {-2, -1, 0, 1, 2};
   float line_position = 0;
-  int total = ch1 + ch2 + ch3 + ch4 + ch5;
+  int total = 5 - (ch1 + ch2 + ch3 + ch4 + ch5);
 
-  if (total > 0) {
+  if (total < 5) {
     line_position = (weights[0] * ch1 + weights[1] * ch2 + weights[2] * ch3 +
                       weights[3] * ch4 + weights[4] * ch5) / (float)total;
   }
-
+  
   // PID control for angular velocity
   float error = line_position;
 
