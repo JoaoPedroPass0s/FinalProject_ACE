@@ -49,9 +49,9 @@ def main():
         label.pack(fill="x", pady=2)
 
     # Create sliders for Kp, Ki, Kd, and Velocity
-    Kp_var = tk.DoubleVar(value=75.0)
-    Ki_var = tk.DoubleVar(value=0.68)
-    Kd_var = tk.DoubleVar(value=0.9)
+    Kp_var = tk.DoubleVar(value=70.0)
+    Ki_var = tk.DoubleVar(value=0.0)
+    Kd_var = tk.DoubleVar(value=0.5)
     Vel_var = tk.DoubleVar(value=2.0)
 
     Kp_slider = tk.Scale(left_frame, from_=0, to_=150, resolution=0.01, orient="horizontal", label="Kp", variable=Kp_var)

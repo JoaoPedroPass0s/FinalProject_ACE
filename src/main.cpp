@@ -94,7 +94,7 @@ int act_count;
 unsigned long interval, last_cycle;
 unsigned long turn_time;
 
-float kp = 75.0, ki = 0.68, kd = 0.9;
+float kp = 70.0, ki = 0.0, kd = 0.5;
 
 float v = 2;
 
@@ -361,38 +361,38 @@ void displayInfo() {
 }
 
 void receiveData() {
-    if (currentClient.available()) {
-        String data = currentClient.readStringUntil('\n'); // Read data until newline character
-        Serial.println("Received data: " + data);          // Debug: Print the received data
+  if (currentClient.available()) {
+      String data = currentClient.readStringUntil('\n'); // Read data until newline character
+      Serial.println("Received data: " + data);          // Debug: Print the received data
 
-        // Parse the incoming data as Kp, Ki, Kd
-        int kpIndex = data.indexOf(',');
-        int kiIndex = data.indexOf(',', kpIndex + 1);
-        int kdIndex = data.indexOf(',', kiIndex + 1);
-        int VelIndex = data.indexOf(',', kdIndex + 1);
+      // Parse the incoming data as Kp, Ki, Kd
+      int kpIndex = data.indexOf(',');
+      int kiIndex = data.indexOf(',', kpIndex + 1);
+      int kdIndex = data.indexOf(',', kiIndex + 1);
+      int VelIndex = data.indexOf(',', kdIndex + 1);
 
-        if (kpIndex > 0 && kiIndex > kpIndex) {
-            // Extract Kp, Ki, Kd values from the string
-            String kpStr = data.substring(0, kpIndex);
-            String kiStr = data.substring(kpIndex + 1, kiIndex);
-            String kdStr = data.substring(kiIndex + 1, kdIndex);
-            String velStr = data.substring(kdIndex + 1, VelIndex);
+      if (kpIndex > 0 && kiIndex > kpIndex) {
+          // Extract Kp, Ki, Kd values from the string
+          String kpStr = data.substring(0, kpIndex);
+          String kiStr = data.substring(kpIndex + 1, kiIndex);
+          String kdStr = data.substring(kiIndex + 1, kdIndex);
+          String velStr = data.substring(kdIndex + 1, VelIndex);
 
-            // Convert strings to floats and update PID values
-            kp = kpStr.toFloat();
-            ki = kiStr.toFloat();
-            kd = kdStr.toFloat();
-            v = velStr.toFloat();
+          // Convert strings to floats and update PID values
+          kp = kpStr.toFloat();
+          ki = kiStr.toFloat();
+          kd = kdStr.toFloat();
+          v = velStr.toFloat();
 
-            Serial.println("Updated PID values:");
-            Serial.println("Kp: " + String(kp));
-            Serial.println("Ki: " + String(ki));
-            Serial.println("Kd: " + String(kd));
-            Serial.println("Velocity: " + String(v));
-        } else {
-            Serial.println("Invalid data received: " + data);
-        }
-    }
+          Serial.println("Updated PID values:");
+          Serial.println("Kp: " + String(kp));
+          Serial.println("Ki: " + String(ki));
+          Serial.println("Kd: " + String(kd));
+          Serial.println("Velocity: " + String(v));
+      } else {
+          Serial.println("Invalid data received: " + data);
+      }
+  }
 }
 
 void followLinePID(){
@@ -422,7 +422,7 @@ void followLinePID(){
 }
 
 void updateVoltage() {
-  int value = analogRead(A0);
+  int value = analogRead(A2);
   float v_out = (value * 3.3f) / 4095.0f;
   float v_in = v_out * (330000.0f + 100000.0f) / 100000.0f;
   robot.battery_voltage = v_in;
