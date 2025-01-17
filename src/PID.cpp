@@ -33,10 +33,10 @@ PID_t::PID_t()
 {
   // Some typical values
   dt = 0.04;
-  Kp = 0.01;
-  Ki = 0.0;
-  Kd = 0.0;
-  Kf = 2.0;
+  Kp = 1.3;
+  Ki = 0.004;
+  Kd = 0;
+  Kf = 0.2;
   
   m_max = 5.8;
   m_min = -5.8;

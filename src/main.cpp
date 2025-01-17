@@ -94,9 +94,9 @@ int act_count;
 unsigned long interval, last_cycle;
 unsigned long turn_time;
 
-float kp = 70.0, ki = 0.0, kd = 0.5;
+float kp =55.0, ki = 0.1, kd = 2.5;
 
-float v = 2;
+float v = 3;
 
 void setMotorPWM(int new_PWM, int pin_a, int pin_b);
 void read_encoders();
@@ -402,9 +402,11 @@ void followLinePID(){
   float line_position = 0;
   int total = 5 - (ch1 + ch2 + ch3 + ch4 + ch5);
 
-  if (total < 5) {
+  if (total > 0) {
     line_position = (weights[0] * ch1 + weights[1] * ch2 + weights[2] * ch3 +
                       weights[3] * ch4 + weights[4] * ch5) / (float)total;
+  }else{
+    line_position = previous_error;
   }
   
   // PID control for angular velocity
@@ -426,6 +428,7 @@ void updateVoltage() {
   float v_out = (value * 3.3f) / 4095.0f;
   float v_in = v_out * (330000.0f + 100000.0f) / 100000.0f;
   robot.battery_voltage = v_in;
+  //robot.battery_voltage = 7.2;
 }
 
 void setRobotVW(float Vnom, float Wnom)
