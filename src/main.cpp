@@ -274,7 +274,7 @@ float previous_error = 0; // For PID control
 float I = 0; // Integral term
 
 float angularVel = 0;
-int objAvoidVel = 150;
+int objAvoidVel = 100;
 
 void controlRobotStm() {
   fsm.tis = millis();
@@ -285,7 +285,7 @@ void controlRobotStm() {
   } else if (fsm.state == sm1_turn1 && sensorDist > 0.15) {
     turn_time = fsm.tis - fsm.tes; // Record turn time
     fsm.new_state = sm1_adjust1; // Move to adjust state
-  } else if (fsm.state == sm1_adjust1 && (fsm.tis - fsm.tes) > 300) {
+  } else if (fsm.state == sm1_adjust1 && (fsm.tis - fsm.tes) > 200) {
     turn_time += fsm.tis - fsm.tes; // Update turn time
     fsm.new_state = sm1_move1; // Move forward slightly
     angularVel = robot.we;
