@@ -3,7 +3,7 @@ import tkinter as tk
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-PICO_IP = "192.168.1.4"  # Replace with your Pico W's IP address
+PICO_IP = "192.168.1.2"  # Replace with your Pico W's IP address
 PORT = 80
 
 def update_display(data, labels):
@@ -49,10 +49,10 @@ def main():
         label.pack(fill="x", pady=2)
 
     # Create sliders for Kp, Ki, Kd, and Velocity
-    Kp_var = tk.DoubleVar(value=60.0)
-    Ki_var = tk.DoubleVar(value=0.0)
+    Kp_var = tk.DoubleVar(value=55.0)
+    Ki_var = tk.DoubleVar(value=0.1)
     Kd_var = tk.DoubleVar(value=2.5)
-    Vel_var = tk.DoubleVar(value=2.0)
+    Vel_var = tk.DoubleVar(value=3.0)
 
     Kp_slider = tk.Scale(left_frame, from_=0, to_=200, resolution=0.01, orient="horizontal", label="Kp", variable=Kp_var)
     Kp_slider.pack(fill="x", pady=5)

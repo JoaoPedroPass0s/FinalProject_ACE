@@ -96,7 +96,9 @@ unsigned long turn_time;
 
 float kp =55.0, ki = 0.1, kd = 2.5;
 
-float v = 3;
+float Vinit = 3;
+
+float v = Vinit;
 
 void setMotorPWM(int new_PWM, int pin_a, int pin_b);
 void read_encoders();
@@ -291,7 +293,7 @@ void controlRobotStm() {
     angularVel = robot.we;
   } else if (fsm.state == sm1_move1 && ((!ch1) || (!ch2) || (!ch3) || (!ch4) || (!ch5))) {
     fsm.new_state = sm1_turn2; // Resume line-following when the line is detected
-  } else if(fsm.state == sm1_turn2 && fsm.tis - fsm.tes > (turn_time/2)){
+  } else if(fsm.state == sm1_turn2 && (fsm.tis - fsm.tes) > turn_time){
     fsm.new_state = sm1_lineFollowing;
   }
 
@@ -302,6 +304,11 @@ void controlRobotStm() {
     fsm.tup = fsm.tis;
 
     if (fsm.state == sm1_lineFollowing) {
+      if(sensorDist < 0.2){
+        v = Vinit * 0.3;
+      }else{
+        v = Vinit;
+      }
       followLinePID();
     } else if (fsm.state == sm1_turn1) {
       setMotorPWM(objAvoidVel, D1, D0); // Turn in place
@@ -311,8 +318,8 @@ void controlRobotStm() {
       setMotorPWM(-objAvoidVel, D3, D2);
     } else if (fsm.state == sm1_move1) {
       float angle = angularVel * (turn_time/1000);
-      float b = 0.12 / cos(angle);
-      followEllipse(0.12, b, angle); // Move forward slightly
+      float b = 0.10 / cos(angle);
+      followEllipse(0.10, b, angle); // Move forward slightly
     }else if(fsm.state == sm1_turn2){
       setMotorPWM(objAvoidVel, D1, D0); // Turn in place
       setMotorPWM(-objAvoidVel, D3, D2);
@@ -382,7 +389,7 @@ void receiveData() {
           kp = kpStr.toFloat();
           ki = kiStr.toFloat();
           kd = kdStr.toFloat();
-          v = velStr.toFloat();
+          Vinit = velStr.toFloat();
 
           Serial.println("Updated PID values:");
           Serial.println("Kp: " + String(kp));
@@ -434,10 +441,8 @@ void updateVoltage() {
 void setRobotVW(float Vnom, float Wnom)
 {
   // Calc outputs
-  robot.setRobotVW(Vnom, Wnom);
-  //robot.accelerationLimit();
-  robot.v = robot.v_req;
-  robot.w = robot.w_req;
+  robot.v = Vnom;
+  robot.w = Wnom;
   robot.VWToMotorsVoltage();
 
   setMotorPWM(robot.PWM_1, D1, D0);
