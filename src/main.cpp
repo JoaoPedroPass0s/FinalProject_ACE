@@ -95,7 +95,6 @@ volatile int count;
 int act_count;
 
 unsigned long interval, last_cycle;
-unsigned long turn_time;
 
 float Vinit = 3;
 
@@ -236,7 +235,7 @@ void set_state(fsm_t& fsm, int new_state)
   }
 }
 
-float angularVel = 0;
+float turnAngle = 0;
 int objAvoidVel = 100;
 
 void controlRobotStm() {
@@ -245,16 +244,16 @@ void controlRobotStm() {
   // State transitions
   if ((fsm.state == sm1_lineFollowing || fsm.state == sm1_move1 || fsm.state == sm1_turn2) && sensorDist < 0.1) {
     fsm.new_state = sm1_turn1; // Start turning
+    robot.rel_theta = 0;
   } else if (fsm.state == sm1_turn1 && sensorDist > 0.15) {
-    turn_time = fsm.tis - fsm.tes; // Record turn time
     fsm.new_state = sm1_adjust1; // Move to adjust state
   } else if (fsm.state == sm1_adjust1 && (fsm.tis - fsm.tes) > 200) {
-    turn_time += fsm.tis - fsm.tes; // Update turn time
     fsm.new_state = sm1_move1; // Move forward slightly
-    angularVel = robot.we;
+    turnAngle = robot.rel_theta;
   } else if (fsm.state == sm1_move1 && ((!ch1) || (!ch2) || (!ch3) || (!ch4) || (!ch5))) {
     fsm.new_state = sm1_turn2; // Resume line-following when the line is detected
-  } else if(fsm.state == sm1_turn2 && (fsm.tis - fsm.tes) > turn_time){
+    robot.rel_theta = 0;
+  } else if(fsm.state == sm1_turn2 && (robot.rel_theta - turnAngle) > 0){
     fsm.new_state = sm1_lineFollowing;
   }
 
@@ -279,9 +278,8 @@ void controlRobotStm() {
       robot_controller.setMotorPWM(objAvoidVel, D1, D0); // Turn in place
       robot_controller.setMotorPWM(-objAvoidVel, D3, D2);
     } else if (fsm.state == sm1_move1) {
-      float angle = angularVel * (turn_time/1000);
-      float b = 0.10 / cos(angle);
-      robot_controller.followEllipse(0.10, b, angle); // Move forward slightly
+      float b = 0.10 / cos(turnAngle);
+      robot_controller.followEllipse(0.10, b, turnAngle); // Move forward slightly
     }else if(fsm.state == sm1_turn2){
       robot_controller.setMotorPWM(objAvoidVel, D1, D0); // Turn in place
       robot_controller.setMotorPWM(-objAvoidVel, D3, D2);
