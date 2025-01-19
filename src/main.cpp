@@ -5,6 +5,7 @@
 #include <Wire.h>
 #include <VL53L0X.h>
 #include "robot.h"
+#include "robot_controller.h"
 #include <RPi_Pico_TimerInterrupt.h>
 
 #define CYW43_WL_GPIO_LED_PIN 0
@@ -43,6 +44,8 @@ enum {
 VL53L0X tof;
 
 robot_t robot;
+
+robot_controller_t robot_controller;
 
 // Web server on port 80
 WiFiServer server(80);
@@ -94,22 +97,14 @@ int act_count;
 unsigned long interval, last_cycle;
 unsigned long turn_time;
 
-float kp =55.0, ki = 0.1, kd = 2.5;
-
 float Vinit = 3;
 
-float v = Vinit;
-
-void setMotorPWM(int new_PWM, int pin_a, int pin_b);
 void read_encoders();
 bool timer_handler(struct repeating_timer *t);
 void displayInfo();
 void controlRobotStm();
-void updateVoltage();
 void set_state(fsm_t& fsm, int new_state);
 void setRobotVW(float Vnom, float Wnom);
-void followLinePID();
-void followEllipse(float a, float b, float theta);
 void receiveData();
 
 void setup() {
@@ -174,6 +169,7 @@ void setup() {
   robot.dt = 1e-3 * interval; // In seconds
   robot.PID1.dt = robot.dt;
   robot.PID2.dt = robot.dt;
+  robot.control_mode = cm_pid;
 
   set_state(fsm, sm1_lineFollowing); 
 
@@ -213,13 +209,13 @@ void loop() {
     tof.startReadRangeMillimeters();
   }
 
-  updateVoltage();
+  robot.updateVoltage();
 
   if(robot.battery_voltage < 6.0){
     robot.PWM_1 = 0;
     robot.PWM_2 = 0;
-    setMotorPWM(robot.PWM_1, D1, D0);
-    setMotorPWM(robot.PWM_2, D3, D2);
+    robot_controller.setMotorPWM(robot.PWM_1, D1, D0);
+    robot_controller.setMotorPWM(robot.PWM_2, D3, D2);
     if(currentMicros % 500 == 0){
       LED_state = !LED_state;
       cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, LED_state);
@@ -239,41 +235,6 @@ void set_state(fsm_t& fsm, int new_state)
     fsm.tup = millis();
   }
 }
-
-void followEllipse(float a, float b, float theta)
-{
-  // Calculate the robot's velocity in x and y directions
-  float vx = -a * sin(theta);
-  float vy = b * cos(theta);
-
-  float maxVel = sqrt((a * a) + (b * b));
-  
-  // Calculate the linear velocity (magnitude of velocity vector)
-  float v = sqrt(vx * vx + vy * vy);
-
-  // Calculate the angular velocity (how fast the robot is turning)
-  float w = (vy * a - vx * b) / (a * b); // This is the angular velocity around the object
-  
-    // Calculate velocities for the left and right wheels
-  float v1 = v - (w * 0.105 / 2);  // Left wheel velocity
-  float v2 = v + (w * 0.105 / 2);  // Right wheel velocity
-  
-  // Convert wheel velocities to PWM values
-  float PWM_1 = (v1 * 255) / maxVel;  // Normalize to PWM range (0-255)
-  float PWM_2 = (v2 * 255) / maxVel;  // Normalize to PWM range (0-255)
-
-  // Ensure PWM values are within the allowed range
-  PWM_1 = constrain(PWM_1, 0, 255);
-  PWM_2 = constrain(PWM_2, 0, 255);
-
-  // Set the motor PWM for left and right motors
-  setMotorPWM(PWM_1, D1, D0);  // Set PWM for left motor
-  setMotorPWM(PWM_2, D3, D2);  // Set PWM for right motor
-}
-
-float previous_error = 0; // For PID control
-
-float I = 0; // Integral term
 
 float angularVel = 0;
 int objAvoidVel = 100;
@@ -305,24 +266,25 @@ void controlRobotStm() {
 
     if (fsm.state == sm1_lineFollowing) {
       if(sensorDist < 0.2){
-        v = Vinit * 0.3;
+        robot_controller.v = Vinit * 0.3;
       }else{
-        v = Vinit;
+        robot_controller.v = Vinit;
       }
-      followLinePID();
+      float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
+      setRobotVW(robot_controller.v, w);
     } else if (fsm.state == sm1_turn1) {
-      setMotorPWM(objAvoidVel, D1, D0); // Turn in place
-      setMotorPWM(-objAvoidVel, D3, D2);
+      robot_controller.setMotorPWM(objAvoidVel, D1, D0); // Turn in place
+      robot_controller.setMotorPWM(-objAvoidVel, D3, D2);
     } else if (fsm.state == sm1_adjust1) {
-      setMotorPWM(objAvoidVel, D1, D0); // Turn in place
-      setMotorPWM(-objAvoidVel, D3, D2);
+      robot_controller.setMotorPWM(objAvoidVel, D1, D0); // Turn in place
+      robot_controller.setMotorPWM(-objAvoidVel, D3, D2);
     } else if (fsm.state == sm1_move1) {
       float angle = angularVel * (turn_time/1000);
       float b = 0.10 / cos(angle);
-      followEllipse(0.10, b, angle); // Move forward slightly
+      robot_controller.followEllipse(0.10, b, angle); // Move forward slightly
     }else if(fsm.state == sm1_turn2){
-      setMotorPWM(objAvoidVel, D1, D0); // Turn in place
-      setMotorPWM(-objAvoidVel, D3, D2);
+      robot_controller.setMotorPWM(objAvoidVel, D1, D0); // Turn in place
+      robot_controller.setMotorPWM(-objAvoidVel, D3, D2);
     }
   }
 
@@ -340,8 +302,8 @@ void displayInfo() {
     String line4 = "Motor 1: " + String(robot.PWM_1) + ", Motor 2: " + String(robot.PWM_2);
     String line5 = "Battery: " + String(robot.battery_voltage) + " V";
     String line6 = "State: " + String(fsm.state);
-    String line7 = "Kp,Ki,Kd: " + String(kp) + "," + String(ki) + "," + String(kd) ;
-    String line8 = "Error: " + String(previous_error);
+    String line7 = "Kp,Ki,Kd: " + String(robot_controller.kp) + "," + String(robot_controller.ki) + "," + String(robot_controller.kd) ;
+    String line8 = "Error: " + String(robot_controller.previous_error);
 
     if (currentMicros % 2000 == 0) {
       Serial.println("Ip address: " + WiFi.localIP().toString());
@@ -386,56 +348,20 @@ void receiveData() {
           String velStr = data.substring(kdIndex + 1, VelIndex);
 
           // Convert strings to floats and update PID values
-          kp = kpStr.toFloat();
-          ki = kiStr.toFloat();
-          kd = kdStr.toFloat();
+          robot_controller.kp = kpStr.toFloat();
+          robot_controller.ki = kiStr.toFloat();
+          robot_controller.kd = kdStr.toFloat();
           Vinit = velStr.toFloat();
 
           Serial.println("Updated PID values:");
-          Serial.println("Kp: " + String(kp));
-          Serial.println("Ki: " + String(ki));
-          Serial.println("Kd: " + String(kd));
-          Serial.println("Velocity: " + String(v));
+          Serial.println("Kp: " + String(robot_controller.kp));
+          Serial.println("Ki: " + String(robot_controller.ki));
+          Serial.println("Kd: " + String(robot_controller.kd));
+          Serial.println("Velocity: " + String(robot_controller.v));
       } else {
           Serial.println("Invalid data received: " + data);
       }
   }
-}
-
-void followLinePID(){
-  
-  // Calculate line position
-  int weights[5] = {-2, -1, 0, 1, 2};
-  float line_position = 0;
-  int total = 5 - (ch1 + ch2 + ch3 + ch4 + ch5);
-
-  if (total > 0) {
-    line_position = (weights[0] * ch1 + weights[1] * ch2 + weights[2] * ch3 +
-                      weights[3] * ch4 + weights[4] * ch5) / (float)total;
-  }else{
-    line_position = previous_error;
-  }
-  
-  // PID control for angular velocity
-  float error = line_position;
-
-  float P = kp * error;
-  I += ki * error * interval / 1000.0; // Integral term
-  float D = kd * (error - previous_error) / (interval / 1000.0); // Derivative term
-  float w_req = P + I + D;
-  previous_error = error;
-
-  robot.control_mode = cm_pid;
-
-  setRobotVW(v, w_req);
-}
-
-void updateVoltage() {
-  int value = analogRead(A2);
-  float v_out = (value * 3.3f) / 4095.0f;
-  float v_in = v_out * (330000.0f + 100000.0f) / 100000.0f;
-  robot.battery_voltage = v_in;
-  //robot.battery_voltage = 7.2;
 }
 
 void setRobotVW(float Vnom, float Wnom)
@@ -445,26 +371,8 @@ void setRobotVW(float Vnom, float Wnom)
   robot.w = Wnom;
   robot.VWToMotorsVoltage();
 
-  setMotorPWM(robot.PWM_1, D1, D0);
-  setMotorPWM(robot.PWM_2, D3, D2);
-}
-
-void setMotorPWM(int new_PWM, int pin_a, int pin_b)
-{
-  int PWM_max = 200;
-  if (new_PWM >  PWM_max) new_PWM =  PWM_max;
-  if (new_PWM < -PWM_max) new_PWM = -PWM_max;
-  
-  if (new_PWM == 0) {  // Both outputs 0 -> A = H, B = H
-    analogWrite(pin_a, 255);
-    analogWrite(pin_b, 255);
-  } else if (new_PWM > 0) {
-    analogWrite(pin_a, 255 - new_PWM);
-    analogWrite(pin_b, 255);
-  } else {
-    analogWrite(pin_a, 255);
-    analogWrite(pin_b, 255 + new_PWM);
-  }
+  robot_controller.setMotorPWM(robot.PWM_1, D1, D0);
+  robot_controller.setMotorPWM(robot.PWM_2, D3, D2);
 }
 
 bool timer_handler(struct repeating_timer *t)
