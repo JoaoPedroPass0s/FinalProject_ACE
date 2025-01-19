@@ -7,6 +7,7 @@
 #include "robot.h"
 #include "robot_controller.h"
 #include <RPi_Pico_TimerInterrupt.h>
+#include <Bounce2.h>
 
 #define CYW43_WL_GPIO_LED_PIN 0
 #define TEST_PIN 27
@@ -23,8 +24,7 @@
 #define CHANNEL_3 2 // GPIO2
 #define CHANNEL_4 3 // GPIO3
 #define CHANNEL_5 4 // GPIO4
-
-#define BUTTON_START 10  // Pin for start button
+#define BUTTON1 5
 
 #define digitalWriteFast(pin, val)  (val ? sio_hw->gpio_set = (1 << pin) : sio_hw->gpio_clr = (1 << pin))
 #define digitalReadFast(pin)        (((1 << pin) & sio_hw->gpio_in) >> pin)
@@ -46,6 +46,8 @@ VL53L0X tof;
 robot_t robot;
 
 robot_controller_t robot_controller;
+
+Bounce debouncerButton1 = Bounce();
 
 // Web server on port 80
 WiFiServer server(80);
@@ -76,6 +78,9 @@ WiFiClient currentClient = server.available();
 // Time variables
 unsigned long currentMicros, previousMicros;
 
+// Button variables
+uint8_t button1;
+
 //Distance sensor variables
 float sensorDist, prev_sensorDist;
 
@@ -95,9 +100,6 @@ volatile int count;
 int act_count;
 
 unsigned long interval, last_cycle;
-
-
-float Vinit = 3;
 
 void read_encoders();
 bool timer_handler(struct repeating_timer *t);
@@ -129,6 +131,11 @@ void setup() {
   pinMode(D1, OUTPUT);
   pinMode(D2, OUTPUT);
   pinMode(D3, OUTPUT);
+
+  pinMode(BUTTON1, INPUT_PULLUP);
+
+  debouncerButton1.attach(BUTTON1);
+  debouncerButton1.interval(50); // 50 ms debounce delay
 
   if (ITimer1.attachInterrupt(40000, timer_handler))
     Serial.println("Starting ITimer OK, millis() = " + String(millis()));
@@ -187,6 +194,9 @@ void loop() {
     }
   }
 
+  debouncerButton1.update();
+  button1 = debouncerButton1.fell();
+
   ch1 = digitalRead(CHANNEL_1);
   ch2 = digitalRead(CHANNEL_2);
   ch3 = digitalRead(CHANNEL_3);
@@ -194,6 +204,10 @@ void loop() {
   ch5 = digitalRead(CHANNEL_5);
   
   currentMicros = millis();
+
+  if(button1){
+    robot_controller.changeMode();
+  }
 
   // Call receiveData
   if (currentClient) {
@@ -266,13 +280,12 @@ void controlRobotStm() {
     fsm.tup = fsm.tis;
 
     if (fsm.state == sm1_lineFollowing) {
-      if(sensorDist < 0.2){
-        robot_controller.v = Vinit * 0.3;
-      }else{
-        robot_controller.v = Vinit;
-      }
       float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
-      setRobotVW(robot_controller.v, w);
+      if(sensorDist < 0.2){
+        setRobotVW(robot_controller.vValues[robot_controller.mode] * 0.3, w);
+      }else{
+        setRobotVW(robot_controller.vValues[robot_controller.mode], w);
+      }
     } else if (fsm.state == sm1_turn1) {
       setMotorPWM(objAvoidVel, D1, D0); // Turn in place
       setMotorPWM(-objAvoidVel, D3, D2);
@@ -308,7 +321,9 @@ void displayInfo() {
     String line4 = "Motor 1: " + String(robot.PWM_1) + ", Motor 2: " + String(robot.PWM_2);
     String line5 = "Battery: " + String(robot.battery_voltage) + " V";
     String line6 = "State: " + String(fsm.state);
-    String line7 = "Kp,Ki,Kd: " + String(robot_controller.kp) + "," + String(robot_controller.ki) + "," + String(robot_controller.kd) ;
+    String line7 = "Kp,Ki,Kd: " + String(robot_controller.kpValues[robot_controller.mode]) 
+    + "," + String(robot_controller.kiValues[robot_controller.mode]) 
+    + "," + String(robot_controller.kdValues[robot_controller.mode]) ;
     String line8 = "Error: " + String(robot_controller.previous_error);
 
     if (currentMicros % 2000 == 0) {
@@ -354,16 +369,16 @@ void receiveData() {
           String velStr = data.substring(kdIndex + 1, VelIndex);
 
           // Convert strings to floats and update PID values
-          robot_controller.kp = kpStr.toFloat();
-          robot_controller.ki = kiStr.toFloat();
-          robot_controller.kd = kdStr.toFloat();
-          Vinit = velStr.toFloat();
+          robot_controller.kpValues[robot_controller.mode] = kpStr.toFloat();
+          robot_controller.kiValues[robot_controller.mode] = kiStr.toFloat();
+          robot_controller.kdValues[robot_controller.mode] = kdStr.toFloat();
+          robot_controller.vValues[robot_controller.mode] = velStr.toFloat();
 
           Serial.println("Updated PID values:");
-          Serial.println("Kp: " + String(robot_controller.kp));
-          Serial.println("Ki: " + String(robot_controller.ki));
-          Serial.println("Kd: " + String(robot_controller.kd));
-          Serial.println("Velocity: " + String(robot_controller.v));
+          Serial.println("Kp: " + String(robot_controller.kpValues[robot_controller.mode]));
+          Serial.println("Ki: " + String(robot_controller.kiValues[robot_controller.mode]));
+          Serial.println("Kd: " + String(robot_controller.kdValues[robot_controller.mode]));
+          Serial.println("Velocity: " + String(robot_controller.vValues[robot_controller.mode]));
       } else {
           Serial.println("Invalid data received: " + data);
       }

@@ -7,10 +7,19 @@ robot_controller_t::robot_controller_t()
   interval = 40;
   previous_error = 0; // For PID control
   I = 0; // Integral term
-  kp = 55.0;
-  ki = 0.1;
-  kd = 2.5; 
-  v = 3;
+  mode = 1;
+  kpValues[0] = 10.0;
+  kpValues[1] = 30.0;
+  kpValues[2] = 55.0;
+  kiValues[0] = 0.0;
+  kiValues[1] = 0.0;
+  kiValues[2] = 0.1;
+  kdValues[0] = 1.0;
+  kdValues[1] = 1.5;
+  kdValues[2] = 2.5;
+  vValues[0] = 1.0;
+  vValues[1] = 2.0;
+  vValues[2] = 3.0;
 }
 
 std::pair<float,float> robot_controller_t::followEllipse(float a, float b, float theta)
@@ -59,11 +68,15 @@ float robot_controller_t::followLinePID(int ch1, int ch2, int ch3, int ch4, int 
   // PID control for angular velocity
   float error = line_position;
 
-  float P = kp * error;
-  I += ki * error * interval / 1000.0; // Integral term
-  float D = kd * (error - previous_error) / (interval / 1000.0); // Derivative term
+  float P = kpValues[mode] * error;
+  I += kiValues[mode] * error * interval / 1000.0; // Integral term
+  float D = kdValues[mode] * (error - previous_error) / (interval / 1000.0); // Derivative term
   float w_req = P + I + D;
   previous_error = error;
 
   return w_req;
+}
+
+void robot_controller_t::changeMode(){
+  mode = (mode + 1) % 3;
 }
