@@ -13,7 +13,7 @@ robot_controller_t::robot_controller_t()
   v = 3;
 }
 
-void robot_controller_t::followEllipse(float a, float b, float theta)
+std::pair<float,float> robot_controller_t::followEllipse(float a, float b, float theta)
 {
   // Calculate the robot's velocity in x and y directions
   float vx = -a * sin(theta);
@@ -39,9 +39,7 @@ void robot_controller_t::followEllipse(float a, float b, float theta)
   PWM_1 = constrain(PWM_1, 0, 255);
   PWM_2 = constrain(PWM_2, 0, 255);
 
-  // Set the motor PWM for left and right motors
-  setMotorPWM(PWM_1, D1, D0);  // Set PWM for left motor
-  setMotorPWM(PWM_2, D3, D2);  // Set PWM for right motor
+  return std::make_pair(PWM_1, PWM_2);
 }
 
 float robot_controller_t::followLinePID(int ch1, int ch2, int ch3, int ch4, int ch5){
@@ -68,22 +66,4 @@ float robot_controller_t::followLinePID(int ch1, int ch2, int ch3, int ch4, int 
   previous_error = error;
 
   return w_req;
-}
-
-void robot_controller_t::setMotorPWM(int new_PWM, int pin_a, int pin_b)
-{
-  int PWM_max = 200;
-  if (new_PWM >  PWM_max) new_PWM =  PWM_max;
-  if (new_PWM < -PWM_max) new_PWM = -PWM_max;
-  
-  if (new_PWM == 0) {  // Both outputs 0 -> A = H, B = H
-    analogWrite(pin_a, 255);
-    analogWrite(pin_b, 255);
-  } else if (new_PWM > 0) {
-    analogWrite(pin_a, 255 - new_PWM);
-    analogWrite(pin_b, 255);
-  } else {
-    analogWrite(pin_a, 255);
-    analogWrite(pin_b, 255 + new_PWM);
-  }
 }

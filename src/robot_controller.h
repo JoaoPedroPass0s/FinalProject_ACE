@@ -11,9 +11,8 @@ class robot_controller_t {
     unsigned long interval; // Time interval for PID control
     float v; // Nominal velocity
 
-    void setMotorPWM(int new_PWM, int pin_a, int pin_b);
     float followLinePID(int ch1, int ch2, int ch3, int ch4, int ch5);
-    void followEllipse(float a, float b, float theta);
+    std::pair<float,float> followEllipse(float a, float b, float theta);
 };
 
 #endif // MOTOR_CONTROLLER_H

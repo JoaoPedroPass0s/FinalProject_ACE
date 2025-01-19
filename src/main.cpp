@@ -96,6 +96,7 @@ int act_count;
 
 unsigned long interval, last_cycle;
 
+
 float Vinit = 3;
 
 void read_encoders();
@@ -104,6 +105,7 @@ void displayInfo();
 void controlRobotStm();
 void set_state(fsm_t& fsm, int new_state);
 void setRobotVW(float Vnom, float Wnom);
+void setMotorPWM(int new_PWM, int pin_a, int pin_b);
 void receiveData();
 
 void setup() {
@@ -213,8 +215,8 @@ void loop() {
   if(robot.battery_voltage < 6.0){
     robot.PWM_1 = 0;
     robot.PWM_2 = 0;
-    robot_controller.setMotorPWM(robot.PWM_1, D1, D0);
-    robot_controller.setMotorPWM(robot.PWM_2, D3, D2);
+    setMotorPWM(robot.PWM_1, D1, D0);
+    setMotorPWM(robot.PWM_2, D3, D2);
     if(currentMicros % 500 == 0){
       LED_state = !LED_state;
       cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, LED_state);
@@ -272,17 +274,23 @@ void controlRobotStm() {
       float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
       setRobotVW(robot_controller.v, w);
     } else if (fsm.state == sm1_turn1) {
-      robot_controller.setMotorPWM(objAvoidVel, D1, D0); // Turn in place
-      robot_controller.setMotorPWM(-objAvoidVel, D3, D2);
+      setMotorPWM(objAvoidVel, D1, D0); // Turn in place
+      setMotorPWM(-objAvoidVel, D3, D2);
     } else if (fsm.state == sm1_adjust1) {
-      robot_controller.setMotorPWM(objAvoidVel, D1, D0); // Turn in place
-      robot_controller.setMotorPWM(-objAvoidVel, D3, D2);
+      setMotorPWM(objAvoidVel, D1, D0); // Turn in place
+      setMotorPWM(-objAvoidVel, D3, D2);
     } else if (fsm.state == sm1_move1) {
-      float b = 0.10 / cos(turnAngle);
-      robot_controller.followEllipse(0.10, b, turnAngle); // Move forward slightly
+      float b = abs(0.12 / cos(turnAngle));
+      Serial.println(b);
+      Serial.println(turnAngle);
+      std::pair<float, float> PWMs;
+      PWMs = robot_controller.followEllipse(0.12, b, turnAngle); // Move forward slightly
+      setMotorPWM(PWMs.first, D1, D0);
+      setMotorPWM(PWMs.second, D3, D2);
     }else if(fsm.state == sm1_turn2){
-      robot_controller.setMotorPWM(objAvoidVel, D1, D0); // Turn in place
-      robot_controller.setMotorPWM(-objAvoidVel, D3, D2);
+      Serial.println(robot.rel_theta);
+      setMotorPWM(objAvoidVel, D1, D0); // Turn in place
+      setMotorPWM(-objAvoidVel, D3, D2);
     }
   }
 
@@ -369,8 +377,26 @@ void setRobotVW(float Vnom, float Wnom)
   robot.w = Wnom;
   robot.VWToMotorsVoltage();
 
-  robot_controller.setMotorPWM(robot.PWM_1, D1, D0);
-  robot_controller.setMotorPWM(robot.PWM_2, D3, D2);
+  setMotorPWM(robot.PWM_1, D1, D0);
+  setMotorPWM(robot.PWM_2, D3, D2);
+}
+
+void setMotorPWM(int new_PWM, int pin_a, int pin_b)
+{
+  int PWM_max = 200;
+  if (new_PWM >  PWM_max) new_PWM =  PWM_max;
+  if (new_PWM < -PWM_max) new_PWM = -PWM_max;
+  
+  if (new_PWM == 0) {  // Both outputs 0 -> A = H, B = H
+    analogWrite(pin_a, 255);
+    analogWrite(pin_b, 255);
+  } else if (new_PWM > 0) {
+    analogWrite(pin_a, 255 - new_PWM);
+    analogWrite(pin_b, 255);
+  } else {
+    analogWrite(pin_a, 255);
+    analogWrite(pin_b, 255 + new_PWM);
+  }
 }
 
 bool timer_handler(struct repeating_timer *t)
