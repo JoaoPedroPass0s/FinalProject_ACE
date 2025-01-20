@@ -82,7 +82,11 @@ unsigned long currentMicros, previousMicros;
 uint8_t button1;
 
 //Distance sensor variables
-float sensorDist, prev_sensorDist;
+float sensorDist = 0 ;
+//float prev_sensorDist = 0;
+
+const int consistentReadings = 3;
+static int objectCount = 0;
 
 // Line following Sensor variables
 int ch1, ch2, ch3, ch4, ch5;
@@ -218,8 +222,17 @@ void loop() {
 
   if(currentMicros % 40){
     if (tof.readRangeAvailable()) {
-      prev_sensorDist = sensorDist;
-      sensorDist = tof.readRangeMillimeters() * 1e-3;
+        float currentReading = tof.readRangeMillimeters() * 1e-3;
+
+        if (currentReading < 0.1) {
+            objectCount++;
+            if (objectCount >= consistentReadings) {
+                sensorDist = currentReading; // Confirm object
+            }
+        } else {
+            objectCount = 0; // Reset if out of range
+            sensorDist = currentReading;
+        }
     }
     tof.startReadRangeMillimeters();
   }
@@ -325,6 +338,10 @@ void displayInfo() {
     + "," + String(robot_controller.kiValues[robot_controller.mode]) 
     + "," + String(robot_controller.kdValues[robot_controller.mode]) ;
     String line8 = "Error: " + String(robot_controller.previous_error);
+    String line9 = "ve: " + String(robot.ve);
+    if(ch1 && ch2 && ch3 && ch4 && ch5){
+      line9 = "ve: " + String(0);
+    }
 
     if (currentMicros % 2000 == 0) {
       Serial.println("Ip address: " + WiFi.localIP().toString());
@@ -338,15 +355,16 @@ void displayInfo() {
       Serial.println(line8);
     }  
 
-    if(currentMicros % 200 == 0){
-      currentClient.println(line1);
-      currentClient.println(line2);
-      currentClient.println(line3);
-      currentClient.println(line4);
-      currentClient.println(line5);
-      currentClient.println(line6);
-      currentClient.println(line7);
+    if(currentMicros % 200 == 0 || true){
+      //currentClient.println(line1);
+      //currentClient.println(line2);
+      //currentClient.println(line3);
+      //currentClient.println(line4);
+      //currentClient.println(line5);
+      //currentClient.println(line6);
+      //currentClient.println(line7);
       currentClient.println(line8);
+      currentClient.println(line9);
     }
 }
 

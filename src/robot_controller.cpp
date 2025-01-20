@@ -10,13 +10,13 @@ robot_controller_t::robot_controller_t()
   mode = 1;
   kpValues[0] = 10.0;
   kpValues[1] = 30.0;
-  kpValues[2] = 55.0;
+  kpValues[2] = 57.33;
   kiValues[0] = 0.0;
   kiValues[1] = 0.0;
-  kiValues[2] = 0.1;
+  kiValues[2] = 2.60;
   kdValues[0] = 1.0;
   kdValues[1] = 1.5;
-  kdValues[2] = 2.5;
+  kdValues[2] = 5.27;
   vValues[0] = 1.0;
   vValues[1] = 2.0;
   vValues[2] = 3.0;
@@ -58,11 +58,13 @@ float robot_controller_t::followLinePID(int ch1, int ch2, int ch3, int ch4, int 
   float line_position = 0;
   int total = 5 - (ch1 + ch2 + ch3 + ch4 + ch5);
 
-  if (total > 0) {
+  if (total > 0) { // Normal Line Following
     line_position = (weights[0] * ch1 + weights[1] * ch2 + weights[2] * ch3 +
                       weights[3] * ch4 + weights[4] * ch5) / (float)total;
-  }else{
+  }else if(previous_error < -0.5 || previous_error > 0.5){ // Sharp Turn
     line_position = previous_error;
+  }else{
+    line_position = 0; // No line detected -> Keep Going Straight
   }
   
   // PID control for angular velocity

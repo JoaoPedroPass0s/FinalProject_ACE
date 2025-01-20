@@ -3,7 +3,7 @@ import tkinter as tk
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-PICO_IP = "192.168.1.2"  # Replace with your Pico W's IP address
+PICO_IP = "192.168.1.7"  # Replace with your Pico W's IP address
 PORT = 80
 
 def update_display(data, labels):
