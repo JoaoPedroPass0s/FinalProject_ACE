@@ -33,12 +33,11 @@
 
 // Direction
 enum {
-  FORWARD = 0,
-  BACKWARD,
-  LEFT,
+  LEFT = 0,
+  UP,
   RIGHT,
-  STOP
-}
+  DOWN
+};
 
 // fsm states LF
 enum {
@@ -54,9 +53,11 @@ enum {
 enum{
   sm2_scan = 0,
   sm2_lineFollowing,
+  sm2_turnUp,
   sm2_turnRight,
   sm2_turnLeft,
-  sm2_turnAround,
+  sm2_turnDown,
+  sm2_stop,
 };
 
 VL53L0X tof;
@@ -88,8 +89,7 @@ fsm_t fsm_GMS; // Grid Maze Solver
 
 int mode;
 
-int LED_state;
-int ledCount = 0;
+int LED_state; // LED state
 
 // WiFi credentials
 const char* ssid = "NOS-676B";       // Replace with your WiFi SSID
@@ -98,7 +98,7 @@ const char* password = "L4N9U7JC"; // Replace with your WiFi password
 WiFiClient currentClient = server.available();
 
 // Time variables
-unsigned long currentMicros, previousMicros;
+unsigned long currentMicros;
 
 // Button variables
 uint8_t button1;
@@ -126,11 +126,11 @@ int encoder_table[16] = {0, 1, -1, 0, -1, 0, 0, 1, 1, 0, 0, -1, 0, -1, 1, 0};
 volatile int count;
 int act_count;
 
-unsigned long interval, last_cycle;
+unsigned long interval;
 
-int x,y;
+int x = 0,y = 0;
 
-int currentDirection = FORWARD;
+int currentDirection = UP;
 
 void read_encoders();
 bool timer_handler(struct repeating_timer *t);
@@ -215,7 +215,7 @@ void setup() {
   set_state(fsm_LF, sm1_lineFollowing); 
   set_state(fsm_GMS, sm2_scan);
 
-  mode = 0; // Line following mode
+  mode = 1; // Line following mode
 
   Serial.println("Starting path following...");
 
@@ -247,7 +247,7 @@ void loop() {
 
   // Check if the button is pressed for 3 seconds
   if (!debouncerButton1.read()) {
-      if (pressStartTime == 0) pressStartTime = millis();
+      if (pressStartTime == 0) pressStartTime = currentMicros;
       if (currentMicros - pressStartTime > 3000){
         changeMode(); // Change Operating mode
         pressStartTime = 0;
@@ -263,7 +263,7 @@ void loop() {
 
   displayInfo();
 
-  if(currentMicros % 40){
+  if(currentMicros % interval == 0){
     if (tof.readRangeAvailable()) {
         float currentReading = tof.readRangeMillimeters() * 1e-3;
 
@@ -334,7 +334,7 @@ void controlRobotLFStm() {
   } else if (fsm_LF.state == sm1_turn1 && sensorDist > 0.15) {
     fsm_LF.new_state = sm1_adjust1; // Move to adjust state
   } else if (fsm_LF.state == sm1_adjust1 && (fsm_LF.tis - fsm_LF.tes) > 200) {
-    fsm_LF.new_state = sm1_move1; // Move forward slightly
+    fsm_LF.new_state = sm1_move1; // Move UP slightly
     turnAngle = robot.rel_theta;
   } else if (fsm_LF.state == sm1_move1 && ((!ch1) || (!ch2) || (!ch3) || (!ch4) || (!ch5))) {
     fsm_LF.new_state = sm1_turn2; // Resume line-following when the line is detected
@@ -364,14 +364,11 @@ void controlRobotLFStm() {
       setMotorPWM(-objAvoidVel, D3, D2);
     } else if (fsm_LF.state == sm1_move1) {
       float b = abs(0.12 / cos(turnAngle));
-      Serial.println(b);
-      Serial.println(turnAngle);
       std::pair<float, float> PWMs;
-      PWMs = robot_controller.followEllipse(0.12, b, turnAngle); // Move forward slightly
+      PWMs = robot_controller.followEllipse(0.12, b, turnAngle); // Move UP slightly
       setMotorPWM(PWMs.first, D1, D0);
       setMotorPWM(PWMs.second, D3, D2);
     }else if(fsm_LF.state == sm1_turn2){
-      Serial.println(robot.rel_theta);
       setMotorPWM(objAvoidVel, D1, D0); // Turn in place
       setMotorPWM(-objAvoidVel, D3, D2);
     }
@@ -384,54 +381,80 @@ void controlRobotLFStm() {
 }
 
 void controlRobotGMSStm() {
+
   fsm_GMS.tis = millis();
 
+  int finalX = 1;
+  int finalY = 1;
+
   // State transitions
-  if(fsm_GMS.state == sm2_scan && sensorDist <= 0.15 && fsm_GMS.tis - fsm_GMS.tes > 1000){
-    if(!ch1){
+  if(fsm_GMS.state == sm2_scan && ch1+ch2+ch3+ch4+ch5 >= 3 && robot.rel_s >= 0.05){
+    if(x == finalX && y == finalY){
+      fsm_GMS.new_state = sm2_stop;
+    }else if(x == finalX && (currentDirection == RIGHT || currentDirection == LEFT)){
+      fsm_GMS.new_state = sm2_turnUp;
+    }else if(y == finalY && (currentDirection == UP || currentDirection == DOWN)){
       fsm_GMS.new_state = sm2_turnRight;
-    }else if(!ch5){
-      fsm_GMS.new_state = sm2_turnLeft;
     }else{
-      fsm_GMS.new_state = sm2_turnAround;
+      fsm_GMS.new_state = sm2_lineFollowing;
     }
     robot.rel_theta = 0;
-  }else if(fsm_GMS.state == sm2_scan){
+  }else if(fsm_GMS.state == sm2_turnUp && robot.rel_theta >= 1.5){
     fsm_GMS.new_state = sm2_lineFollowing;
-  }else if(fsm_GMS.state == sm2_turnRight && robot.rel_theta >= 0.5){
+    currentDirection = UP;
+  }else if(fsm_GMS.state == sm2_turnRight && robot.rel_theta <= -1.5){
+    fsm_GMS.new_state = sm2_lineFollowing;
+    currentDirection = RIGHT;
+  }else if(fsm_GMS.state == sm2_lineFollowing && (ch1+ch2+ch3+ch4+ch5 < 3)){
     fsm_GMS.new_state = sm2_scan;
-  }else if(fsm_GMS.state == sm2_turnLeft && robot.rel_theta <= -0.5){
-    fsm_GMS.new_state = sm2_scan;
-  }else if(fsm_GMS.state == sm2_turnAround && robot.rel_theta >= 1){
-    fsm_GMS.new_state = sm2_scan;
-  }else if(fsm_GMS.state == sm2_lineFollowing && ch1+ch2+ch3+ch4+ch5 >= 3){
-    fsm_GMS.new_state = sm2_scan;
+    robot.rel_s = 0;
+    switch (currentDirection)
+    {
+      case UP:
+        y++;
+        break;
+      case RIGHT:
+        x++;
+        break;
+      case LEFT:
+        x--;
+        break;
+      case DOWN:
+        y--;
+        break;
+    }
   }
 
   set_state(fsm_GMS, fsm_GMS.new_state);
 
-  // State actions
-  if(fsm_GMS.state = sm2_scan){
-    setMotorPWM(0, D1, D0);
-    setMotorPWM(0, D3, D2);
-  }else if(fsm_GMS.state = sm2_lineFollowing){
-    float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
-    setRobotVW(robot_controller.vValues[robot_controller.mode], w);
-  }else if(fsm_GMS.state = sm2_turnRight){
-    setMotorPWM(100, D1, D0);
-    setMotorPWM(-100, D3, D2);
-  }else if(fsm_GMS.state = sm2_turnLeft){
-    setMotorPWM(-100, D1, D0);
-    setMotorPWM(100, D3, D2);
-  }else if(fsm_GMS.state = sm2_turnAround){
-    setMotorPWM(100, D1, D0);
-    setMotorPWM(-100, D3, D2);
+    // State actions
+  if (fsm_GMS.tis - fsm_GMS.tup > interval) {
+    fsm_GMS.tup = fsm_GMS.tis;
+    if(fsm_GMS.state == sm2_scan){
+      setRobotVW(robot_controller.vValues[robot_controller.mode], 0);
+    }else if(fsm_GMS.state == sm2_lineFollowing){
+      float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
+      setRobotVW(robot_controller.vValues[robot_controller.mode], w);
+    }else if(fsm_GMS.state == sm2_turnRight){
+      setRobotVW(0, -15);
+    }else if(fsm_GMS.state == sm2_turnLeft){
+      setRobotVW(0, 15);
+    }else if(fsm_GMS.state == sm2_turnDown){
+      setRobotVW(0, 15);
+    }else if(fsm_GMS.state == sm2_stop){
+      setRobotVW(0, 0);
+    }
+
+    read_encoders();
+    robot.enc1 = enc1;
+    robot.enc2 = -enc2;
+    robot.odometry();
   }
 }
 
 void displayInfo() {
 
-    String line1 = "encoder1: " + String(enc1) + ", encoder2: " + String(enc2);
+    String line1 = "enc1: " + String(robot.enc1) + ", enc2: " + String(robot.enc2);
     String line2 = "Channels: " + String(ch1) + String(ch2) + String(ch3) + String(ch4) + String(ch5);
     String line3 = "Dist: " + String(sensorDist, 5) + " m";
     String line4 = "Motor 1: " + String(robot.PWM_1) + ", Motor 2: " + String(robot.PWM_2);
@@ -445,8 +468,10 @@ void displayInfo() {
     if(ch1 && ch2 && ch3 && ch4 && ch5){
       line9 = "ve: " + String(0);
     }
+    String line10 = "X: " + String(x) + ", Y: " + String(y);
+    String line11 = "Rel S: " + String(robot.rel_s) + ", Rel Theta: " + String(robot.rel_theta);
 
-    if (currentMicros % 2000 == 0) {
+    if (currentMicros % 200 == 0) {
       Serial.println("Ip address: " + WiFi.localIP().toString());
       Serial.println(line1);
       Serial.println(line2);
@@ -456,9 +481,11 @@ void displayInfo() {
       Serial.println(line6);
       Serial.println(line7);
       Serial.println(line8);
+      Serial.println(line10);
+      Serial.println(line11);
     }  
 
-    if(currentMicros % 200 == 0 || true){
+    if(currentMicros % 200 == 0){
       //currentClient.println(line1);
       //currentClient.println(line2);
       //currentClient.println(line3);

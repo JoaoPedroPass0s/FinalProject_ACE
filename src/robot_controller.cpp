@@ -7,7 +7,7 @@ robot_controller_t::robot_controller_t()
   interval = 40;
   previous_error = 0; // For PID control
   I = 0; // Integral term
-  mode = 1;
+  mode = 0;
   kpValues[0] = 10.0;
   kpValues[1] = 30.0;
   kpValues[2] = 57.33;
