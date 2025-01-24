@@ -25,6 +25,8 @@
 #define CHANNEL_4 3 // GPIO3
 #define CHANNEL_5 4 // GPIO4
 #define BUTTON1 5
+#define BUTTON2 6
+#define BUTTON3 7
 
 #define digitalWriteFast(pin, val)  (val ? sio_hw->gpio_set = (1 << pin) : sio_hw->gpio_clr = (1 << pin))
 #define digitalReadFast(pin)        (((1 << pin) & sio_hw->gpio_in) >> pin)
@@ -58,6 +60,8 @@ robot_t robot;
 robot_controller_t robot_controller;
 
 Bounce debouncerButton1 = Bounce();
+Bounce debouncerButton2 = Bounce();
+Bounce debouncerButton3 = Bounce();
 
 // Web server on port 80
 WiFiServer server(80);
@@ -82,6 +86,8 @@ int mode;
 
 int LED_state; // LED state
 
+bool itsRunning = false;
+
 // WiFi credentials
 const char* ssid = "NOS-676B";       // Replace with your WiFi SSID
 const char* password = "L4N9U7JC"; // Replace with your WiFi password
@@ -93,6 +99,8 @@ unsigned long currentMicros;
 
 // Button variables
 uint8_t button1;
+uint8_t button2;
+uint8_t button3;
 
 unsigned long pressStartTime = 0;
 
@@ -158,9 +166,15 @@ void setup() {
   pinMode(D3, OUTPUT);
 
   pinMode(BUTTON1, INPUT_PULLUP);
+  pinMode(BUTTON2, INPUT_PULLUP);
+  pinMode(BUTTON3, INPUT_PULLUP);
 
   debouncerButton1.attach(BUTTON1);
   debouncerButton1.interval(50); // 50 ms debounce delay
+  debouncerButton2.attach(BUTTON2);
+  debouncerButton2.interval(50); // 50 ms debounce delay
+  debouncerButton3.attach(BUTTON3);
+  debouncerButton3.interval(50); // 50 ms debounce delay  
 
   if (ITimer1.attachInterrupt(40000, timer_handler))
     Serial.println("Starting ITimer OK, millis() = " + String(millis()));
@@ -207,7 +221,7 @@ void setup() {
   set_state(fsm_LF, sm1_lineFollowing); 
   set_state(fsm_GMS, sm2_scan);
 
-  mode = 1; // Line following mode
+  mode = 0; // Line following mode
 
   Serial.println("Starting path following...");
 
@@ -223,7 +237,11 @@ void loop() {
   }
 
   debouncerButton1.update();
+  debouncerButton2.update();
+  debouncerButton3.update();
   button1 = debouncerButton1.fell();
+  button2 = debouncerButton2.fell();
+  button3 = debouncerButton3.fell();
 
   ch1 = digitalRead(CHANNEL_1);
   ch2 = digitalRead(CHANNEL_2);
@@ -234,18 +252,13 @@ void loop() {
   currentMicros = millis();
 
   if(button1){
+    itsRunning = !itsRunning;
+  }
+  if(button2){
     robot_controller.changeMode(); // Change PID Mode 
   }
-
-  // Check if the button is pressed for 3 seconds
-  if (!debouncerButton1.read()) {
-      if (pressStartTime == 0) pressStartTime = currentMicros;
-      if (currentMicros - pressStartTime > 3000){
-        changeMode(); // Change Operating mode
-        pressStartTime = 0;
-      }  
-  } else {
-      pressStartTime = 0;
+  if(button3){
+    changeMode();
   }
 
   // Call receiveData
@@ -274,7 +287,7 @@ void loop() {
 
   robot.updateVoltage();
 
-  if(robot.battery_voltage < 6.0){
+  if(robot.battery_voltage < 6.0 || !itsRunning){
     robot.PWM_1 = 0;
     robot.PWM_2 = 0;
     setMotorPWM(robot.PWM_1, D1, D0);
@@ -473,7 +486,7 @@ void displayInfo() {
     if(ch1 && ch2 && ch3 && ch4 && ch5){
       line9 = "ve: " + String(0);
     }
-    String line10 = "X: " + String(x) + ", Y: " + String(y);
+    String line10 = "Mode: " + String(mode);
     String line11 = "Rel S: " + String(robot.rel_s) + ", Rel Theta: " + String(robot.rel_theta);
 
     if (currentMicros % 200 == 0) {
