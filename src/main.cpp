@@ -379,8 +379,8 @@ void controlRobotGMSStm() {
 
   fsm_GMS.tis = millis();
 
-  int finalX = 1;
-  int finalY = 2;
+  int finalX = 2;
+  int finalY = 1;
 
   // State transitions
   if(fsm_GMS.state == sm2_scan && ch1+ch2+ch3+ch4+ch5 >= 3 && robot.rel_s >= 0.05){
@@ -392,11 +392,11 @@ void controlRobotGMSStm() {
       currentDirection = nextDirection; // Update current direction
     }
     robot.rel_theta = 0;
-  }else if(fsm_GMS.state == sm2_turnRight && robot.rel_theta <= -1.5 && !ch3){
+  }else if(fsm_GMS.state == sm2_turnRight && robot.rel_theta <= -1 && !ch3){
     fsm_GMS.new_state = sm2_lineFollowing;
-  }else if(fsm_GMS.state == sm2_turnLeft && robot.rel_theta >= 1.5 && !ch3){
+  }else if(fsm_GMS.state == sm2_turnLeft && robot.rel_theta >= 1 && !ch3){
     fsm_GMS.new_state = sm2_lineFollowing;
-  }else if(fsm_GMS.state == sm2_turnBack && robot.rel_theta >= 3.5 && !ch3){
+  }else if(fsm_GMS.state == sm2_turnBack && robot.rel_theta >= 3 && !ch3){
     fsm_GMS.new_state = sm2_lineFollowing;
   }else if(fsm_GMS.state == sm2_lineFollowing && sensorDist < 0.05){ // Object detected
     fsm_GMS.new_state = sm2_turnBack;
