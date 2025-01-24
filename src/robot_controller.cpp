@@ -17,7 +17,7 @@ robot_controller_t::robot_controller_t()
   kdValues[0] = 1.0;
   kdValues[1] = 1.5;
   kdValues[2] = 5.27;
-  vValues[0] = 1.0;
+  vValues[0] = 1.5;
   vValues[1] = 2.0;
   vValues[2] = 3.0;
 }
@@ -26,35 +26,59 @@ int robot_controller_t::calculateNextMove(int x, int y, int currentDirection, in
     // Define movement directions
     int dx[4] = {-1, 0, 1, 0};
     int dy[4] = {0, -1, 0, 1};
-
     int direction[4] = {LEFT, DOWN, RIGHT, UP};
 
-    // Start with a high heuristic value (infinity)
-    int bestHeuristic = INT_MAX;
+    // Create a flood-fill grid
+    int floodGrid[GRID_ROWS][GRID_COLS];
+    for (int i = 0; i < GRID_ROWS; i++) {
+        for (int j = 0; j < GRID_COLS; j++) {
+            floodGrid[i][j] = (objects[i][j] == 0) ? -1 : INT_MAX; // -1 for empty cells, INT_MAX for obstacles
+        }
+    }
+
+    // Flood-fill starting from the goal
+    std::queue<std::pair<int, int>> q;
+    q.push({finalY, finalX});
+    floodGrid[finalY][finalX] = 0; // Goal has a distance of 0
+
+    while (!q.empty()) {
+        int currentY = q.front().first;
+        int currentX = q.front().second;
+        q.pop();
+
+        for (int i = 0; i < 4; i++) {
+            int nextX = currentX + dx[i];
+            int nextY = currentY + dy[i];
+
+            // Check bounds and if the cell hasn't been visited yet
+            if (nextX >= 0 && nextX < GRID_COLS && nextY >= 0 && nextY < GRID_ROWS && floodGrid[nextY][nextX] == -1) {
+                floodGrid[nextY][nextX] = floodGrid[currentY][currentX] + 1;
+                q.push({nextY, nextX});
+            }
+        }
+    }
+
+    // Determine the next move based on floodGrid
+    int bestDistance = INT_MAX;
     int nextDirection = -1;
 
-    // Check all possible directions
     for (int i = 0; i < 4; i++) {
         int nextX = x + dx[i];
         int nextY = y + dy[i];
 
-        // Check if the move is within bounds and not blocked
-        if (nextX >= 0 && nextX < GRID_COLS && nextY >= 0 && nextY < GRID_ROWS && objects[nextY][nextX] == 0) {
-            // Calculate heuristic (Manhattan distance to target)
-            int heuristic = abs(finalX - nextX) + abs(finalY - nextY);
-
-            // Select the move with the lowest heuristic value
-            if (heuristic < bestHeuristic) {
-                bestHeuristic = heuristic;
-                nextDirection = direction[i];
-            }else if(heuristic == bestHeuristic && currentDirection != nextDirection){
+        // Check bounds and ensure the cell is not an obstacle
+        if (nextX >= 0 && nextX < GRID_COLS && nextY >= 0 && nextY < GRID_ROWS && floodGrid[nextY][nextX] != INT_MAX) {
+            if (floodGrid[nextY][nextX] < bestDistance || (floodGrid[nextY][nextX] == bestDistance && direction[i] == currentDirection)) {
+                bestDistance = floodGrid[nextY][nextX];
                 nextDirection = direction[i];
             }
         }
     }
 
-    return nextDirection;
+    // If no valid direction found, return currentDirection to avoid turning back unnecessarily
+    return (nextDirection == -1) ? currentDirection : nextDirection;
 }
+
 
 std::pair<float,float> robot_controller_t::followEllipse(float a, float b, float theta)
 {

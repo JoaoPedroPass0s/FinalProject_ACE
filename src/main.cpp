@@ -185,15 +185,15 @@ void setup() {
   tof.startReadRangeMillimeters();  
 
   // Initialize WiFi
-  Serial.print("Connecting to WiFi");
+  //Serial.print("Connecting to WiFi");
   //WiFi.begin(ssid, password);
   //while (WiFi.status() != WL_CONNECTED) {
   //  delay(500);
   //  Serial.print(".");
   //}
-  Serial.println("\nWiFi connected.");
-  Serial.print("IP Address: ");
-  Serial.println(WiFi.localIP());
+  //Serial.println("\nWiFi connected.");
+  //Serial.print("IP Address: ");
+  //Serial.println(WiFi.localIP());
 
   // Start the server
   //server.begin();
@@ -379,11 +379,11 @@ void controlRobotGMSStm() {
 
   fsm_GMS.tis = millis();
 
-  int finalX = 2;
-  int finalY = 2;
+  int finalX = 5;
+  int finalY = 4;
 
   // State transitions
-  if(fsm_GMS.state == sm2_scan && ch1+ch2+ch3+ch4+ch5 >= 3 && robot.rel_s >= 0.08){
+  if(fsm_GMS.state == sm2_scan && ch1+ch2+ch3+ch4+ch5 >= 3 && robot.rel_s >= 0.1){
     if(x == finalX && y == finalY){
       fsm_GMS.new_state = sm2_stop;
     }else{
@@ -424,9 +424,9 @@ void controlRobotGMSStm() {
       float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
       setRobotVW(robot_controller.vValues[robot_controller.mode], w);
     }else if(fsm_GMS.state == sm2_turnRight){
-      setRobotVW(0, -15);
+      setRobotVW(0, -30);
     }else if(fsm_GMS.state == sm2_turnLeft || fsm_GMS.state == sm2_turnBack){
-      setRobotVW(0, 15);
+      setRobotVW(0, 30);
     }else if(fsm_GMS.state == sm2_stop){
       setRobotVW(0, 0);
     }
@@ -498,8 +498,8 @@ void displayInfo() {
       //currentClient.println(line5);
       //currentClient.println(line6);
       //currentClient.println(line7);
-      currentClient.println(line8);
-      currentClient.println(line9);
+      currentClient.println(line10);
+      currentClient.println(line11);
     }
 }
 
