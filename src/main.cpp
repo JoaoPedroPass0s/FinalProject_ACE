@@ -380,10 +380,10 @@ void controlRobotGMSStm() {
   fsm_GMS.tis = millis();
 
   int finalX = 2;
-  int finalY = 1;
+  int finalY = 2;
 
   // State transitions
-  if(fsm_GMS.state == sm2_scan && ch1+ch2+ch3+ch4+ch5 >= 3 && robot.rel_s >= 0.05){
+  if(fsm_GMS.state == sm2_scan && ch1+ch2+ch3+ch4+ch5 >= 3 && robot.rel_s >= 0.08){
     if(x == finalX && y == finalY){
       fsm_GMS.new_state = sm2_stop;
     }else{
