@@ -31,14 +31,6 @@
 
 #define pinIsHigh(pin, pins)        (((1 << pin) & pins) >> pin)
 
-// Direction
-enum {
-  LEFT = 0,
-  UP,
-  RIGHT,
-  DOWN
-};
-
 // fsm states LF
 enum {
   sm1_lineFollowing = 0,
@@ -53,10 +45,9 @@ enum {
 enum{
   sm2_scan = 0,
   sm2_lineFollowing,
-  sm2_turnUp,
   sm2_turnRight,
   sm2_turnLeft,
-  sm2_turnDown,
+  sm2_turnBack,
   sm2_stop,
 };
 
@@ -137,6 +128,7 @@ bool timer_handler(struct repeating_timer *t);
 void displayInfo();
 void controlRobotLFStm();
 void controlRobotGMSStm();
+int calculateTurnState(int currentDirection, int nextDirection);
 void set_state(fsm_t& fsm, int new_state);
 void setRobotVW(float Vnom, float Wnom);
 void setMotorPWM(int new_PWM, int pin_a, int pin_b);
@@ -380,54 +372,50 @@ void controlRobotLFStm() {
   robot.odometry();
 }
 
+// Coords with objects
+int objects[GRID_ROWS][GRID_COLS] = {};
+
 void controlRobotGMSStm() {
 
   fsm_GMS.tis = millis();
 
   int finalX = 1;
-  int finalY = 1;
+  int finalY = 2;
 
   // State transitions
   if(fsm_GMS.state == sm2_scan && ch1+ch2+ch3+ch4+ch5 >= 3 && robot.rel_s >= 0.05){
     if(x == finalX && y == finalY){
       fsm_GMS.new_state = sm2_stop;
-    }else if(x == finalX && (currentDirection == RIGHT || currentDirection == LEFT)){
-      fsm_GMS.new_state = sm2_turnUp;
-    }else if(y == finalY && (currentDirection == UP || currentDirection == DOWN)){
-      fsm_GMS.new_state = sm2_turnRight;
     }else{
-      fsm_GMS.new_state = sm2_lineFollowing;
+      int nextDirection = robot_controller.calculateNextMove(x,y,objects,finalX,finalY); // Calculate next Direction
+      fsm_GMS.new_state = calculateTurnState(currentDirection, nextDirection); // Calculate turn state
+      currentDirection = nextDirection; // Update current direction
     }
     robot.rel_theta = 0;
-  }else if(fsm_GMS.state == sm2_turnUp && robot.rel_theta >= 1.5){
+  }else if(fsm_GMS.state == sm2_turnRight && robot.rel_theta <= -1.5 && !ch3){
     fsm_GMS.new_state = sm2_lineFollowing;
-    currentDirection = UP;
-  }else if(fsm_GMS.state == sm2_turnRight && robot.rel_theta <= -1.5){
+  }else if(fsm_GMS.state == sm2_turnLeft && robot.rel_theta >= 1.5 && !ch3){
     fsm_GMS.new_state = sm2_lineFollowing;
-    currentDirection = RIGHT;
+  }else if(fsm_GMS.state == sm2_turnBack && robot.rel_theta >= 3.5 && !ch3){
+    fsm_GMS.new_state = sm2_lineFollowing;
+  }else if(fsm_GMS.state == sm2_lineFollowing && sensorDist < 0.05){ // Object detected
+    fsm_GMS.new_state = sm2_turnBack;
+    // Add to objects
+    x += (currentDirection == RIGHT) - (currentDirection == LEFT);
+    y += (currentDirection == UP) - (currentDirection == DOWN);
+    objects[y][x] = 1;
+    currentDirection = (currentDirection + 2) % 4;
+    robot.rel_theta = 0;
   }else if(fsm_GMS.state == sm2_lineFollowing && (ch1+ch2+ch3+ch4+ch5 < 3)){
     fsm_GMS.new_state = sm2_scan;
     robot.rel_s = 0;
-    switch (currentDirection)
-    {
-      case UP:
-        y++;
-        break;
-      case RIGHT:
-        x++;
-        break;
-      case LEFT:
-        x--;
-        break;
-      case DOWN:
-        y--;
-        break;
-    }
+    x += (currentDirection == RIGHT) - (currentDirection == LEFT);
+    y += (currentDirection == UP) - (currentDirection == DOWN);
   }
 
   set_state(fsm_GMS, fsm_GMS.new_state);
 
-    // State actions
+  // State actions
   if (fsm_GMS.tis - fsm_GMS.tup > interval) {
     fsm_GMS.tup = fsm_GMS.tis;
     if(fsm_GMS.state == sm2_scan){
@@ -437,9 +425,7 @@ void controlRobotGMSStm() {
       setRobotVW(robot_controller.vValues[robot_controller.mode], w);
     }else if(fsm_GMS.state == sm2_turnRight){
       setRobotVW(0, -15);
-    }else if(fsm_GMS.state == sm2_turnLeft){
-      setRobotVW(0, 15);
-    }else if(fsm_GMS.state == sm2_turnDown){
+    }else if(fsm_GMS.state == sm2_turnLeft || fsm_GMS.state == sm2_turnBack){
       setRobotVW(0, 15);
     }else if(fsm_GMS.state == sm2_stop){
       setRobotVW(0, 0);
@@ -450,6 +436,25 @@ void controlRobotGMSStm() {
     robot.enc2 = -enc2;
     robot.odometry();
   }
+}
+
+int calculateTurnState(int currentDirection, int nextDirection) {
+    // Calculate turn direction considering the circular nature of directions
+    int turnDirection = (nextDirection - currentDirection + 4) % 4;
+
+    // Map turn direction to states
+    if (turnDirection == 0) {
+        return sm2_lineFollowing; // No turn needed
+    } else if (turnDirection == 1) {
+        return sm2_turnRight; // 90 degrees clockwise
+    } else if (turnDirection == 3) {
+        return sm2_turnLeft; // 90 degrees counterclockwise
+    } else if (turnDirection == 2) {
+        return sm2_turnBack; // 180 degrees turn
+    }
+
+    // Invalid turn direction (should not happen in normal cases)
+    return -1;
 }
 
 void displayInfo() {

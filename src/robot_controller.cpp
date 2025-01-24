@@ -22,6 +22,38 @@ robot_controller_t::robot_controller_t()
   vValues[2] = 3.0;
 }
 
+int robot_controller_t::calculateNextMove(int x, int y, int objects[GRID_ROWS][GRID_COLS], int finalX, int finalY) {
+    // Define movement directions
+    int dx[4] = {-1, 0, 1, 0};
+    int dy[4] = {0, -1, 0, 1};
+
+    int direction[4] = {LEFT, DOWN, RIGHT, UP};
+
+    // Start with a high heuristic value (infinity)
+    int bestHeuristic = INT_MAX;
+    int nextDirection = -1;
+
+    // Check all possible directions
+    for (int i = 0; i < 4; i++) {
+        int nextX = x + dx[i];
+        int nextY = y + dy[i];
+
+        // Check if the move is within bounds and not blocked
+        if (nextX >= 0 && nextX < GRID_COLS && nextY >= 0 && nextY < GRID_ROWS && objects[nextY][nextX] == 0) {
+            // Calculate heuristic (Manhattan distance to target)
+            int heuristic = abs(finalX - nextX) + abs(finalY - nextY);
+
+            // Select the move with the lowest heuristic value
+            if (heuristic <= bestHeuristic) {
+                bestHeuristic = heuristic;
+                nextDirection = direction[i];
+            }
+        }
+    }
+
+    return nextDirection;
+}
+
 std::pair<float,float> robot_controller_t::followEllipse(float a, float b, float theta)
 {
   // Calculate the robot's velocity in x and y directions
