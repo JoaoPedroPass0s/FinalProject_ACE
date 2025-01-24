@@ -22,7 +22,7 @@ robot_controller_t::robot_controller_t()
   vValues[2] = 3.0;
 }
 
-int robot_controller_t::calculateNextMove(int x, int y, int objects[GRID_ROWS][GRID_COLS], int finalX, int finalY) {
+int robot_controller_t::calculateNextMove(int x, int y, int currentDirection, int objects[GRID_ROWS][GRID_COLS], int finalX, int finalY) {
     // Define movement directions
     int dx[4] = {-1, 0, 1, 0};
     int dy[4] = {0, -1, 0, 1};
@@ -44,8 +44,10 @@ int robot_controller_t::calculateNextMove(int x, int y, int objects[GRID_ROWS][G
             int heuristic = abs(finalX - nextX) + abs(finalY - nextY);
 
             // Select the move with the lowest heuristic value
-            if (heuristic <= bestHeuristic) {
+            if (heuristic < bestHeuristic) {
                 bestHeuristic = heuristic;
+                nextDirection = direction[i];
+            }else if(heuristic == bestHeuristic && currentDirection != nextDirection){
                 nextDirection = direction[i];
             }
         }

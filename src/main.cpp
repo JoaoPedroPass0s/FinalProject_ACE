@@ -387,7 +387,7 @@ void controlRobotGMSStm() {
     if(x == finalX && y == finalY){
       fsm_GMS.new_state = sm2_stop;
     }else{
-      int nextDirection = robot_controller.calculateNextMove(x,y,objects,finalX,finalY); // Calculate next Direction
+      int nextDirection = robot_controller.calculateNextMove(x,y,currentDirection,objects,finalX,finalY); // Calculate next Direction
       fsm_GMS.new_state = calculateTurnState(currentDirection, nextDirection); // Calculate turn state
       currentDirection = nextDirection; // Update current direction
     }

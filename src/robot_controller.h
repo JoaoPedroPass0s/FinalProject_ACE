@@ -26,7 +26,7 @@ class robot_controller_t {
     float I ; // Integral term
     unsigned long interval; // Time interval for PID control
 
-    int calculateNextMove(int x, int y, int objects[GRID_ROWS][GRID_COLS], int finalX, int finalY);
+    int calculateNextMove(int x, int y, int currentDirection, int objects[GRID_ROWS][GRID_COLS], int finalX, int finalY);
     float followLinePID(int ch1, int ch2, int ch3, int ch4, int ch5);
     std::pair<float,float> followEllipse(float a, float b, float theta);
     void changeMode();
