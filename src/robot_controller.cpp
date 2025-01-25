@@ -94,7 +94,7 @@ std::pair<float,float> robot_controller_t::followEllipse(float a, float b, float
   // Calculate the angular velocity (how fast the robot is turning)
   float w = (vy * a - vx * b) / (a * b); // This is the angular velocity around the object
   
-    // Calculate velocities for the left and right wheels
+  // Calculate velocities for the left and right wheels
   float v1 = v - (w * 0.105 / 2);  // Left wheel velocity
   float v2 = v + (w * 0.105 / 2);  // Right wheel velocity
   

@@ -356,34 +356,25 @@ void controlRobotLFStm() {
 
     if (fsm_LF.state == sm1_lineFollowing) {
       float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
-      if(sensorDist < 0.2){
-        // Slow down when object is detected
-        setRobotVW(1.5, w);
-      }else{
-        setRobotVW(robot_controller.vValues[robot_controller.mode], w);
-      }
+      // Slow down when object is detected
+      setRobotVW(sensorDist < 0.2 ? 0.5 : robot_controller.vValues[robot_controller.mode], w);
     } else if (fsm_LF.state == sm1_turn1) {
-      setMotorPWM(objAvoidVel, D1, D0); // Turn in place
-      setMotorPWM(-objAvoidVel, D3, D2);
+      setRobotVW(0, 30); // Turn in place
     } else if (fsm_LF.state == sm1_adjust1) {
-      setMotorPWM(objAvoidVel, D1, D0); // Turn in place
-      setMotorPWM(-objAvoidVel, D3, D2);
+      setRobotVW(0,30); // Turn in place
     } else if (fsm_LF.state == sm1_move1) {
       float b = abs(0.12 / cos(turnAngle));
-      std::pair<float, float> PWMs;
-      PWMs = robot_controller.followEllipse(0.12, b, turnAngle); // Move UP slightly
-      setMotorPWM(PWMs.first, D1, D0);
-      setMotorPWM(PWMs.second, D3, D2);
+      std::pair<float,float> PMWValues = robot_controller.followEllipse(0.12, b, turnAngle); // Follow ellipse
+      setMotorPWM(PMWValues.first, D1, D0);
+      setMotorPWM(PMWValues.second, D3, D2);
     }else if(fsm_LF.state == sm1_turn2){
-      setMotorPWM(objAvoidVel, D1, D0); // Turn in place
-      setMotorPWM(-objAvoidVel, D3, D2);
+      setRobotVW(0, 30); // Turn in place
     }
+    read_encoders();
+    robot.enc1 = enc1;
+    robot.enc2 = enc2;
+    robot.odometry();
   }
-
-  read_encoders();
-  robot.enc1 = enc1;
-  robot.enc2 = enc2;
-  robot.odometry();
 }
 
 // Coords with objects
