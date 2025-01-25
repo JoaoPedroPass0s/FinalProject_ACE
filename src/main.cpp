@@ -337,14 +337,17 @@ void controlRobotLFStm() {
     fsm_LF.new_state = sm1_turn1; // Start turning
     robot.rel_theta = 0;
   } else if (fsm_LF.state == sm1_turn1 && sensorDist > 0.15) {
-    fsm_LF.new_state = sm1_adjust1; // Move to adjust state
-  } else if (fsm_LF.state == sm1_adjust1 && (fsm_LF.tis - fsm_LF.tes) > 200) {
-    fsm_LF.new_state = sm1_move1; // Move UP slightly
     turnAngle = robot.rel_theta;
+    fsm_LF.new_state = sm1_adjust1; // Rotate to adjust state
+    robot.rel_theta = 0;
+  } else if (fsm_LF.state == sm1_adjust1 && robot.rel_theta <= -0.7) {
+    fsm_LF.new_state = sm1_move1; // Rotate to move state
+    turnAngle += robot.rel_theta;
+    Serial.println(turnAngle);
   } else if (fsm_LF.state == sm1_move1 && ((!ch1) || (!ch2) || (!ch3) || (!ch4) || (!ch5))) {
     fsm_LF.new_state = sm1_turn2; // Resume line-following when the line is detected
     robot.rel_theta = 0;
-  } else if(fsm_LF.state == sm1_turn2 && (robot.rel_theta - turnAngle) > 0){
+  } else if(fsm_LF.state == sm1_turn2 && (robot.rel_theta - turnAngle) >= 0){
     fsm_LF.new_state = sm1_lineFollowing;
   }
 
@@ -357,22 +360,21 @@ void controlRobotLFStm() {
     if (fsm_LF.state == sm1_lineFollowing) {
       float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
       // Slow down when object is detected
-      setRobotVW(sensorDist < 0.2 ? 0.5 : robot_controller.vValues[robot_controller.mode], w);
+      setRobotVW((sensorDist <= 0.15) ? 1.5 : robot_controller.vValues[robot_controller.mode], w);
     } else if (fsm_LF.state == sm1_turn1) {
-      setRobotVW(0, 30); // Turn in place
+      setRobotVW(0,-30); // Turn in place
     } else if (fsm_LF.state == sm1_adjust1) {
-      setRobotVW(0,30); // Turn in place
+      setRobotVW(0,-30); // Turn in place
     } else if (fsm_LF.state == sm1_move1) {
-      float b = abs(0.12 / cos(turnAngle));
-      std::pair<float,float> PMWValues = robot_controller.followEllipse(0.12, b, turnAngle); // Follow ellipse
-      setMotorPWM(PMWValues.first, D1, D0);
-      setMotorPWM(PMWValues.second, D3, D2);
+      float b = abs(0.10 / cos(turnAngle));
+      float w = robot_controller.followEllipse(0.10, b, turnAngle, 2.0);
+      setRobotVW(2.0, w);
     }else if(fsm_LF.state == sm1_turn2){
-      setRobotVW(0, 30); // Turn in place
+      setRobotVW(0, -30); // Turn in place
     }
     read_encoders();
     robot.enc1 = enc1;
-    robot.enc2 = enc2;
+    robot.enc2 = -enc2;
     robot.odometry();
   }
 }
@@ -397,11 +399,11 @@ void controlRobotGMSStm() {
       currentDirection = nextDirection; // Update current direction
     }
     robot.rel_theta = 0;
-  }else if(fsm_GMS.state == sm2_turnRight && robot.rel_theta <= -1 && !ch3){
+  }else if(fsm_GMS.state == sm2_turnRight && (robot.rel_theta <= -(3 / 2)) && !ch3){
     fsm_GMS.new_state = sm2_lineFollowing;
-  }else if(fsm_GMS.state == sm2_turnLeft && robot.rel_theta >= 1 && !ch3){
+  }else if(fsm_GMS.state == sm2_turnLeft && (robot.rel_theta >= (3 / 2)) && !ch3){
     fsm_GMS.new_state = sm2_lineFollowing;
-  }else if(fsm_GMS.state == sm2_turnBack && robot.rel_theta >= 3 && !ch3){
+  }else if(fsm_GMS.state == sm2_turnBack && (robot.rel_theta >= 3) && !ch3){
     fsm_GMS.new_state = sm2_lineFollowing;
   }else if(fsm_GMS.state == sm2_lineFollowing && sensorDist < 0.05){ // Object detected
     fsm_GMS.new_state = sm2_turnBack;
@@ -423,12 +425,9 @@ void controlRobotGMSStm() {
   // State actions
   if (fsm_GMS.tis - fsm_GMS.tup > interval) {
     fsm_GMS.tup = fsm_GMS.tis;
-    if(fsm_GMS.state == sm2_scan){
+    if(fsm_GMS.state == sm2_lineFollowing || fsm_GMS.state == sm2_scan){
       float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
-      setRobotVW(robot_controller.vValues[robot_controller.mode], w);
-    }else if(fsm_GMS.state == sm2_lineFollowing){
-      float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
-      setRobotVW(robot_controller.vValues[robot_controller.mode], w);
+      setRobotVW((sensorDist <= 0.15) ? 1.5 : robot_controller.vValues[robot_controller.mode], w);
     }else if(fsm_GMS.state == sm2_turnRight){
       setRobotVW(0, -30);
     }else if(fsm_GMS.state == sm2_turnLeft || fsm_GMS.state == sm2_turnBack){

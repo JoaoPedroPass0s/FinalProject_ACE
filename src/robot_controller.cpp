@@ -80,33 +80,21 @@ int robot_controller_t::calculateNextMove(int x, int y, int currentDirection, in
 }
 
 
-std::pair<float,float> robot_controller_t::followEllipse(float a, float b, float theta)
+float robot_controller_t::followEllipse(float a, float b, float theta, float v)
 {
-  // Calculate the robot's velocity in x and y directions
-  float vx = -a * sin(theta);
-  float vy = b * cos(theta);
+  // Calculate the radius of curvature at the given angle theta.
+  float cosTheta = cos(theta);
+  float sinTheta = sin(theta);
+  float numerator = a * b;
+  float denominator = sqrt(pow(b * cosTheta, 2) + pow(a * sinTheta, 2));
 
-  float maxVel = sqrt((a * a) + (b * b));
-  
-  // Calculate the linear velocity (magnitude of velocity vector)
-  float v = sqrt(vx * vx + vy * vy);
+    // Radius of curvature at theta
+  float radius = numerator / denominator;
 
-  // Calculate the angular velocity (how fast the robot is turning)
-  float w = (vy * a - vx * b) / (a * b); // This is the angular velocity around the object
-  
-  // Calculate velocities for the left and right wheels
-  float v1 = v - (w * 0.105 / 2);  // Left wheel velocity
-  float v2 = v + (w * 0.105 / 2);  // Right wheel velocity
-  
-  // Convert wheel velocities to PWM values
-  float PWM_1 = (v1 * 255) / maxVel;  // Normalize to PWM range (0-255)
-  float PWM_2 = (v2 * 255) / maxVel;  // Normalize to PWM range (0-255)
+    // Angular velocity: omega = v / radius
+  float omega = v / radius;
 
-  // Ensure PWM values are within the allowed range
-  PWM_1 = constrain(PWM_1, 0, 255);
-  PWM_2 = constrain(PWM_2, 0, 255);
-
-  return std::make_pair(PWM_1, PWM_2);
+  return omega;
 }
 
 float robot_controller_t::followLinePID(int ch1, int ch2, int ch3, int ch4, int ch5){
