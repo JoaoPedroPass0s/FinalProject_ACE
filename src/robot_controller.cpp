@@ -10,13 +10,13 @@ robot_controller_t::robot_controller_t()
   mode = 0;
   kpValues[0] = 10.0;
   kpValues[1] = 30.0;
-  kpValues[2] = 57.33;
+  kpValues[2] = 40.0;
   kiValues[0] = 0.0;
   kiValues[1] = 0.0;
-  kiValues[2] = 2.60;
+  kiValues[2] = 0.1;
   kdValues[0] = 1.0;
   kdValues[1] = 1.5;
-  kdValues[2] = 5.27;
+  kdValues[2] = 2.0;
   vValues[0] = 1.5;
   vValues[1] = 2.0;
   vValues[2] = 3.0;

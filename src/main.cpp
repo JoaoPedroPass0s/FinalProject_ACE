@@ -357,7 +357,8 @@ void controlRobotLFStm() {
     if (fsm_LF.state == sm1_lineFollowing) {
       float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
       if(sensorDist < 0.2){
-        setRobotVW(robot_controller.vValues[robot_controller.mode] * 0.3, w);
+        // Slow down when object is detected
+        setRobotVW(1.5, w);
       }else{
         setRobotVW(robot_controller.vValues[robot_controller.mode], w);
       }
@@ -396,7 +397,7 @@ void controlRobotGMSStm() {
   int finalY = 4;
 
   // State transitions
-  if(fsm_GMS.state == sm2_scan && ch1+ch2+ch3+ch4+ch5 >= 3 && robot.rel_s >= 0.1){
+  if(fsm_GMS.state == sm2_scan && ch1+ch2+ch3+ch4+ch5 >= 3 && robot.rel_s >= 0.05){
     if(x == finalX && y == finalY){
       fsm_GMS.new_state = sm2_stop;
     }else{
@@ -432,7 +433,8 @@ void controlRobotGMSStm() {
   if (fsm_GMS.tis - fsm_GMS.tup > interval) {
     fsm_GMS.tup = fsm_GMS.tis;
     if(fsm_GMS.state == sm2_scan){
-      setRobotVW(robot_controller.vValues[robot_controller.mode], 0);
+      float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
+      setRobotVW(robot_controller.vValues[robot_controller.mode], w);
     }else if(fsm_GMS.state == sm2_lineFollowing){
       float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
       setRobotVW(robot_controller.vValues[robot_controller.mode], w);
