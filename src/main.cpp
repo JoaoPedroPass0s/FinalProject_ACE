@@ -327,15 +327,16 @@ void set_state(fsm_t& fsm, int new_state)
 }
 
 float turnAngle = 0;
-int objAvoidVel = 100;
+float a = 0;
 
 void controlRobotLFStm() {
   fsm_LF.tis = millis();
 
   // State transitions
-  if ((fsm_LF.state == sm1_lineFollowing || fsm_LF.state == sm1_move1 || fsm_LF.state == sm1_turn2) && sensorDist < 0.1) {
+  if ((fsm_LF.state == sm1_lineFollowing || fsm_LF.state == sm1_move1 || fsm_LF.state == sm1_turn2) && sensorDist <= 0.1) {
     fsm_LF.new_state = sm1_turn1; // Start turning
     robot.rel_theta = 0;
+    a = sensorDist + 0.01;
   } else if (fsm_LF.state == sm1_turn1 && sensorDist > 0.15) {
     turnAngle = robot.rel_theta;
     fsm_LF.new_state = sm1_adjust1; // Rotate to adjust state
@@ -366,8 +367,8 @@ void controlRobotLFStm() {
     } else if (fsm_LF.state == sm1_adjust1) {
       setRobotVW(0,-30); // Turn in place
     } else if (fsm_LF.state == sm1_move1) {
-      float b = abs(0.10 / cos(turnAngle));
-      float w = robot_controller.followEllipse(0.10, b, turnAngle, 2.0);
+      float b = (a * sin(abs(turnAngle))) / (sin((PI/2) - abs(turnAngle)));
+      float w = robot_controller.followEllipse(a, b, turnAngle, 2.0);
       setRobotVW(2.0, w);
     }else if(fsm_LF.state == sm1_turn2){
       setRobotVW(0, -30); // Turn in place
