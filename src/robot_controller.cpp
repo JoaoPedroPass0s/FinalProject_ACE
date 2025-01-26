@@ -97,6 +97,9 @@ float robot_controller_t::followEllipse(float a, float b, float theta, float v)
   return omega;
 }
 
+static unsigned long last_detection_time = millis();
+bool sharp_turn_detected = false;
+
 float robot_controller_t::followLinePID(int ch1, int ch2, int ch3, int ch4, int ch5){
   
   // Calculate line position
@@ -107,8 +110,20 @@ float robot_controller_t::followLinePID(int ch1, int ch2, int ch3, int ch4, int 
   if (total > 0) { // Normal Line Following
     line_position = (weights[0] * ch1 + weights[1] * ch2 + weights[2] * ch3 +
                       weights[3] * ch4 + weights[4] * ch5) / (float)total;
-  }else if(previous_error < -0.5 || previous_error > 0.5){ // Sharp Turn
+    if(!ch1 || !ch5){
+      sharp_turn_detected = true;
+      last_detection_time = millis();
+    }else if(millis() - last_detection_time > 500){
+      sharp_turn_detected = false;
+    }
+  }else if(abs(previous_error) > 0.5){ // Sharp Turn
     line_position = previous_error;
+  }else if(sharp_turn_detected){
+    if(previous_error > 0){
+      line_position = 2;
+    }else{
+      line_position = -2;
+    }
   }else{
     line_position = 0; // No line detected -> Keep Going Straight
   }
