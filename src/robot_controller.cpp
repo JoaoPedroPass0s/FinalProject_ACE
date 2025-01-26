@@ -11,15 +11,19 @@ robot_controller_t::robot_controller_t()
   kpValues[0] = 10.0;
   kpValues[1] = 30.0;
   kpValues[2] = 40.0;
+  kpValues[3] = 40.0;
   kiValues[0] = 0.0;
   kiValues[1] = 0.0;
   kiValues[2] = 0.1;
+  kiValues[3] = 0.1;
   kdValues[0] = 1.0;
   kdValues[1] = 1.5;
   kdValues[2] = 2.0;
+  kdValues[3] = 2.0;
   vValues[0] = 1.5;
   vValues[1] = 2.0;
   vValues[2] = 3.0;
+  vValues[3] = 3.5;
 }
 
 int robot_controller_t::calculateNextMove(int x, int y, int currentDirection, int objects[GRID_ROWS][GRID_COLS], int finalX, int finalY) {
@@ -113,10 +117,10 @@ float robot_controller_t::followLinePID(int ch1, int ch2, int ch3, int ch4, int 
     if(!ch1 || !ch5){
       sharp_turn_detected = true;
       last_detection_time = millis();
-    }else if(millis() - last_detection_time > 500){
+    }else if(millis() - last_detection_time > 200){
       sharp_turn_detected = false;
     }
-  }else if(abs(previous_error) > 0.5){ // Sharp Turn
+  }else if(abs(previous_error) > 1.0){ // Sharp Turn
     line_position = previous_error;
   }else if(sharp_turn_detected){
     if(previous_error > 0){
@@ -141,5 +145,5 @@ float robot_controller_t::followLinePID(int ch1, int ch2, int ch3, int ch4, int 
 }
 
 void robot_controller_t::changeMode(){
-  mode = (mode + 1) % 3;
+  mode = (mode + 1) % 4;
 }

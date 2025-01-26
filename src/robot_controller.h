@@ -16,10 +16,10 @@ class robot_controller_t {
   public:
     robot_controller_t();
 
-    float kpValues[3];
-    float kiValues[3];
-    float kdValues[3];
-    float vValues[3];
+    float kpValues[4];
+    float kiValues[4];
+    float kdValues[4];
+    float vValues[4];
 
     int mode;
     float previous_error; // For PID control
