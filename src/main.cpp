@@ -50,6 +50,7 @@ enum{
   sm2_turnRight,
   sm2_turnLeft,
   sm2_turnBack,
+  sm2_goBack,
   sm2_stop,
 };
 
@@ -399,24 +400,28 @@ void controlRobotGMSStm() {
       fsm_GMS.new_state = calculateTurnState(currentDirection, nextDirection); // Calculate turn state
       currentDirection = nextDirection; // Update current direction
     }
+  }else if(fsm_GMS.state == sm2_turnRight && (robot.rel_theta <= -(2.5 / 2)) && !ch3){
+    fsm_GMS.new_state = sm2_lineFollowing;
+  }else if(fsm_GMS.state == sm2_turnLeft && (robot.rel_theta >= (2.5 / 2)) && !ch3){
+    fsm_GMS.new_state = sm2_lineFollowing;
+  }else if(fsm_GMS.state == sm2_turnBack && (robot.rel_theta >= 2.5) && !ch3){
+    fsm_GMS.new_state = sm2_lineFollowing;
+  }else if(fsm_GMS.state == sm2_goBack && (ch1+ch2+ch3+ch4+ch5 < 3)){
+    fsm_GMS.new_state = sm2_scan;
+    robot.rel_s = 0;
     robot.rel_theta = 0;
-  }else if(fsm_GMS.state == sm2_turnRight && (robot.rel_theta <= -(3 / 2)) && !ch3){
-    fsm_GMS.new_state = sm2_lineFollowing;
-  }else if(fsm_GMS.state == sm2_turnLeft && (robot.rel_theta >= (3 / 2)) && !ch3){
-    fsm_GMS.new_state = sm2_lineFollowing;
-  }else if(fsm_GMS.state == sm2_turnBack && (robot.rel_theta >= 3) && !ch3){
-    fsm_GMS.new_state = sm2_lineFollowing;
-  }else if(fsm_GMS.state == sm2_lineFollowing && sensorDist < 0.05){ // Object detected
-    fsm_GMS.new_state = sm2_turnBack;
+  }else if(fsm_GMS.state == sm2_lineFollowing && sensorDist < 0.1){ // Object detected
+    fsm_GMS.new_state = sm2_goBack;
     // Add to objects
-    x += (currentDirection == RIGHT) - (currentDirection == LEFT);
-    y += (currentDirection == UP) - (currentDirection == DOWN);
-    objects[y][x] = 1;
-    currentDirection = (currentDirection + 2) % 4;
+    int tx = x + (currentDirection == RIGHT) - (currentDirection == LEFT);
+    int ty = y + (currentDirection == UP) - (currentDirection == DOWN);
+    objects[ty][tx] = 1;
+    //currentDirection = (currentDirection + 2) % 4;
     robot.rel_theta = 0;
   }else if(fsm_GMS.state == sm2_lineFollowing && (ch1+ch2+ch3+ch4+ch5 < 3)){
     fsm_GMS.new_state = sm2_scan;
     robot.rel_s = 0;
+    robot.rel_theta = 0;
     x += (currentDirection == RIGHT) - (currentDirection == LEFT);
     y += (currentDirection == UP) - (currentDirection == DOWN);
   }
@@ -429,6 +434,9 @@ void controlRobotGMSStm() {
     if(fsm_GMS.state == sm2_lineFollowing || fsm_GMS.state == sm2_scan){
       float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
       setRobotVW((sensorDist <= 0.15) ? 1.5 : robot_controller.vValues[robot_controller.mode], w);
+    }else if(fsm_GMS.state == sm2_goBack){
+      float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
+      setRobotVW(-robot_controller.vValues[robot_controller.mode], w);
     }else if(fsm_GMS.state == sm2_turnRight){
       setRobotVW(0, -30);
     }else if(fsm_GMS.state == sm2_turnLeft || fsm_GMS.state == sm2_turnBack){
