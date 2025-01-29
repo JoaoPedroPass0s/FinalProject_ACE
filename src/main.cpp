@@ -143,6 +143,7 @@ void setRobotVW(float Vnom, float Wnom);
 void setMotorPWM(int new_PWM, int pin_a, int pin_b);
 void receiveData();
 void changeMode();
+void initWifi();
 
 void setup() {
   Serial.begin(9600);
@@ -199,20 +200,6 @@ void setup() {
   // Start new distance measure
   tof.startReadRangeMillimeters();  
 
-  // Initialize WiFi
-  //Serial.print("Connecting to WiFi");
-  //WiFi.begin(ssid, password);
-  //while (WiFi.status() != WL_CONNECTED) {
-  //  delay(500);
-  //  Serial.print(".");
-  //}
-  //Serial.println("\nWiFi connected.");
-  //Serial.print("IP Address: ");
-  //Serial.println(WiFi.localIP());
-
-  // Start the server
-  //server.begin();
-
   interval = 40;             // In miliseconds
   robot.dt = 1e-3 * interval; // In seconds
   robot.PID1.dt = robot.dt;
@@ -262,6 +249,17 @@ void loop() {
     changeMode();
   }
 
+    // Check if the button is pressed for 3 seconds
+  if (!debouncerButton1.read()) {
+      if (pressStartTime == 0) pressStartTime = millis();
+      if (millis() - pressStartTime > 3000){
+        initWifi(); // Reconnect to WiFi
+        pressStartTime = 0;
+      }  
+  } else {
+      pressStartTime = 0;
+  }
+
   // Call receiveData
   if (currentClient) {
     receiveData();
@@ -304,6 +302,22 @@ void loop() {
       controlRobotGMSStm();
     }
   }
+}
+
+void initWifi(){
+  // Initialize WiFi
+  Serial.print("Connecting to WiFi");
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi connected.");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  // Start the server
+  server.begin();
 }
 
 void changeMode(){
@@ -362,7 +376,7 @@ void controlRobotLFStm() {
     if (fsm_LF.state == sm1_lineFollowing) {
       float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
       // Slow down when object is detected
-      setRobotVW((sensorDist <= 0.15) ? 1.5 : robot_controller.vValues[robot_controller.mode], w);
+      setRobotVW((sensorDist <= 0.2) ? 1.5 : robot_controller.vValues[robot_controller.mode], w);
     } else if (fsm_LF.state == sm1_turn1) {
       setRobotVW(0,-30); // Turn in place
     } else if (fsm_LF.state == sm1_adjust1) {
