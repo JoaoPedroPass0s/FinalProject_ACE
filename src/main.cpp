@@ -36,6 +36,7 @@
 // fsm states LF
 enum {
   sm1_lineFollowing = 0,
+  sm1_stop,
   sm1_turn1,
   sm1_adjust1,
   sm1_move1,
@@ -195,7 +196,7 @@ void setup() {
   }  
 
   // Reduce timing budget to 20 ms (default is about 33 ms)
-  //tof.setMeasurementTimingBudget(20000);
+  tof.setMeasurementTimingBudget(20000);
 
   // Start new distance measure
   tof.startReadRangeMillimeters();  
@@ -349,10 +350,12 @@ void controlRobotLFStm() {
 
   // State transitions
   if ((fsm_LF.state == sm1_lineFollowing || fsm_LF.state == sm1_move1 || fsm_LF.state == sm1_turn2) && sensorDist <= 0.1) {
-    fsm_LF.new_state = sm1_turn1; // Start turning
-    robot.rel_theta = 0;
+    fsm_LF.new_state = sm1_stop; // Start turning
+  }else if(fsm_LF.state == sm1_stop && fsm_LF.tis - fsm_LF.tes > 100){
     a = sensorDist + 0.01;
-  } else if (fsm_LF.state == sm1_turn1 && sensorDist > 0.15) {
+    robot.rel_theta = 0;
+    fsm_LF.new_state = sm1_turn1; // Turn in place
+  } else if (fsm_LF.state == sm1_turn1 && sensorDist > 0.20) {
     turnAngle = robot.rel_theta;
     fsm_LF.new_state = sm1_adjust1; // Rotate to adjust state
     robot.rel_theta = 0;
@@ -387,7 +390,10 @@ void controlRobotLFStm() {
       setRobotVW(2.0, w);
     }else if(fsm_LF.state == sm1_turn2){
       setRobotVW(0, -30); // Turn in place
+    }else if(fsm_LF.state == sm1_stop){
+      setRobotVW(0, 0);
     }
+
     read_encoders();
     robot.enc1 = enc1;
     robot.enc2 = -enc2;
@@ -424,13 +430,12 @@ void controlRobotGMSStm() {
     fsm_GMS.new_state = sm2_scan;
     robot.rel_s = 0;
     robot.rel_theta = 0;
-  }else if(fsm_GMS.state == sm2_lineFollowing && sensorDist < 0.1){ // Object detected
+  }else if(fsm_GMS.state == sm2_lineFollowing && sensorDist <= 0.1){ // Object detected
     fsm_GMS.new_state = sm2_goBack;
     // Add to objects
     int tx = x + (currentDirection == RIGHT) - (currentDirection == LEFT);
     int ty = y + (currentDirection == UP) - (currentDirection == DOWN);
     objects[ty][tx] = 1;
-    //currentDirection = (currentDirection + 2) % 4;
     robot.rel_theta = 0;
   }else if(fsm_GMS.state == sm2_lineFollowing && (ch1+ch2+ch3+ch4+ch5 < 3)){
     fsm_GMS.new_state = sm2_scan;
@@ -447,7 +452,7 @@ void controlRobotGMSStm() {
     fsm_GMS.tup = fsm_GMS.tis;
     if(fsm_GMS.state == sm2_lineFollowing || fsm_GMS.state == sm2_scan){
       float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
-      setRobotVW((sensorDist <= 0.15) ? 1.5 : robot_controller.vValues[robot_controller.mode], w);
+      setRobotVW((sensorDist <= 0.17) ? 1.5 : robot_controller.vValues[robot_controller.mode], w);
     }else if(fsm_GMS.state == sm2_goBack){
       float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
       setRobotVW(-robot_controller.vValues[robot_controller.mode], w);
