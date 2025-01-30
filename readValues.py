@@ -3,7 +3,7 @@ import tkinter as tk
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-PICO_IP = "192.168.1.6"  # Replace with your Pico W's IP address
+PICO_IP = "192.168.43.62"  # Replace with your Pico W's IP address
 PORT = 80
 
 def update_display(data, labels):
@@ -11,9 +11,12 @@ def update_display(data, labels):
     Updates the labels on the GUI with the received data.
     """
     lines = data.split("\n")
-    for i, line in enumerate(lines):
-        if i < len(labels):
-            labels[i].config(text=line)
+    for i in range(len(labels)):  # Ensure we update all labels
+        if i < len(lines):
+            labels[i].config(text=lines[i])
+        else:
+            labels[i].config(text="")  # Clear extra labels if there are fewer lines
+
 
 def send_pid_values(client_socket, Kp, Ki, Kd, vel):
     """
@@ -43,15 +46,16 @@ def main():
     right_frame = tk.Frame(main_pane, padx=10, pady=10)
     main_pane.add(right_frame)
 
-    # Create labels for each line of data in the left frame
-    labels = [tk.Label(left_frame, text="", font=("Arial", 14), anchor="w") for _ in range(6)]
+   # Create labels for each line of data in the left frame
+    labels = [tk.Label(left_frame, text="", font=("Arial", 14), anchor="w") for _ in range(8)]  # Changed from 6 to 8
     for label in labels:
         label.pack(fill="x", pady=2)
 
+
     # Create sliders for Kp, Ki, Kd, and Velocity
-    Kp_var = tk.DoubleVar(value=55.0)
+    Kp_var = tk.DoubleVar(value=40.0)
     Ki_var = tk.DoubleVar(value=0.1)
-    Kd_var = tk.DoubleVar(value=2.5)
+    Kd_var = tk.DoubleVar(value=2.0)
     Vel_var = tk.DoubleVar(value=3.0)
 
     Kp_slider = tk.Scale(left_frame, from_=0, to_=200, resolution=0.01, orient="horizontal", label="Kp", variable=Kp_var)

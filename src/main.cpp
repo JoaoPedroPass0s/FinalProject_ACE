@@ -91,8 +91,8 @@ int LED_state; // LED state
 bool itsRunning = false;
 
 // WiFi credentials
-const char* ssid = "NOS-676B";       // Replace with your WiFi SSID
-const char* password = "L4N9U7JC"; // Replace with your WiFi password
+const char* ssid = "HONOR View20";       // Replace with your WiFi SSID
+const char* password = "robottest"; // Replace with your WiFi password
 
 WiFiClient currentClient = server.available();
 
@@ -502,12 +502,6 @@ void displayInfo() {
     + "," + String(robot_controller.kiValues[robot_controller.mode]) 
     + "," + String(robot_controller.kdValues[robot_controller.mode]) ;
     String line8 = "Error: " + String(robot_controller.previous_error);
-    String line9 = "ve: " + String(robot.ve);
-    if(ch1 && ch2 && ch3 && ch4 && ch5){
-      line9 = "ve: " + String(0);
-    }
-    String line10 = "Mode: " + String(mode);
-    String line11 = "Rel S: " + String(robot.rel_s) + ", Rel Theta: " + String(robot.rel_theta);
 
     if (currentMicros % 200 == 0) {
       Serial.println("Ip address: " + WiFi.localIP().toString());
@@ -519,20 +513,17 @@ void displayInfo() {
       Serial.println(line6);
       Serial.println(line7);
       Serial.println(line8);
-      Serial.println(line10);
-      Serial.println(line11);
     }  
 
     if(currentMicros % 200 == 0){
-      //currentClient.println(line1);
-      //currentClient.println(line2);
-      //currentClient.println(line3);
-      //currentClient.println(line4);
-      //currentClient.println(line5);
-      //currentClient.println(line6);
-      //currentClient.println(line7);
-      currentClient.println(line10);
-      currentClient.println(line11);
+      currentClient.println(line1);
+      currentClient.println(line2);
+      currentClient.println(line3);
+      currentClient.println(line4);
+      currentClient.println(line5);
+      currentClient.println(line6);
+      currentClient.println(line7);
+      currentClient.println(line8);
     }
 }
 
