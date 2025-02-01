@@ -19,11 +19,6 @@
 #define D1 14      // Motor 1 IN2
 #define D2 11      // Motor 2 IN1
 #define D3 12      // Motor 2 IN2
-#define CHANNEL_1 0 // GPIO0
-#define CHANNEL_2 1 // GPIO1
-#define CHANNEL_3 2 // GPIO2
-#define CHANNEL_4 3 // GPIO3
-#define CHANNEL_5 4 // GPIO4
 #define BUTTON1 5
 #define BUTTON2 6
 #define BUTTON3 7
@@ -179,13 +174,6 @@ void setup() {
   pinMode(ENCB1, INPUT);
   pinMode(ENCA2, INPUT);
   pinMode(ENCB2, INPUT);
-
-  // Set sensor pins as inputs
-  pinMode(CHANNEL_1, INPUT);
-  pinMode(CHANNEL_2, INPUT);
-  pinMode(CHANNEL_3, INPUT);
-  pinMode(CHANNEL_4, INPUT);
-  pinMode(CHANNEL_5, INPUT);
 
   pinMode(D0, OUTPUT);
   pinMode(D1, OUTPUT);
