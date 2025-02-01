@@ -28,6 +28,20 @@
 #define BUTTON2 6
 #define BUTTON3 7
 
+// Multiplexer control pins
+#define S0 10  
+#define S1 9  
+#define S2 8  
+
+// ADC pin connected to MUX output
+#define MUX_ADC_PIN 27  // GPIO27 (ADC1)
+
+// Number of sensors
+#define NUM_SENSORS 5
+
+// Analog threshold to determine black/white (adjust based on your sensors)
+#define THRESHOLD 1000  // Experiment and adjust
+
 #define digitalWriteFast(pin, val)  (val ? sio_hw->gpio_set = (1 << pin) : sio_hw->gpio_clr = (1 << pin))
 #define digitalReadFast(pin)        (((1 << pin) & sio_hw->gpio_in) >> pin)
 
@@ -113,7 +127,12 @@ const int consistentReadings = 3;
 static int objectCount = 0;
 
 // Line following Sensor variables
-int ch1, ch2, ch3, ch4, ch5;
+int sensorValues[NUM_SENSORS];
+int binaryValues[NUM_SENSORS];
+
+static int currentSensor = 0;
+static unsigned long lastReadTime = 0;
+const unsigned long sensorReadInterval = 2;  // Adjust based on response time
 
 int enc1, enc2;
 
@@ -145,6 +164,8 @@ void setMotorPWM(int new_PWM, int pin_a, int pin_b);
 void receiveData();
 void changeMode();
 void initWifi();
+void selectChannel(int channel);
+int readSensor(int channel);
 
 void setup() {
   Serial.begin(9600);
@@ -171,6 +192,11 @@ void setup() {
   pinMode(BUTTON1, INPUT_PULLUP);
   pinMode(BUTTON2, INPUT_PULLUP);
   pinMode(BUTTON3, INPUT_PULLUP);
+
+  // Set MUX select pins as outputs
+  pinMode(S0, OUTPUT);
+  pinMode(S1, OUTPUT);
+  pinMode(S2, OUTPUT);
 
   debouncerButton1.attach(BUTTON1);
   debouncerButton1.interval(50); // 50 ms debounce delay
@@ -232,11 +258,16 @@ void loop() {
   button2 = debouncerButton2.fell();
   button3 = debouncerButton3.fell();
 
-  ch1 = digitalRead(CHANNEL_1);
-  ch2 = digitalRead(CHANNEL_2);
-  ch3 = digitalRead(CHANNEL_3);
-  ch4 = digitalRead(CHANNEL_4);
-  ch5 = digitalRead(CHANNEL_5);
+  if (millis() - lastReadTime >= sensorReadInterval) {
+    lastReadTime = millis();  // Update last read time
+
+    // Read current sensor
+    sensorValues[currentSensor] = readSensor(currentSensor);
+    binaryValues[currentSensor] = sensorValues[currentSensor] < THRESHOLD ? 0 : 1;
+
+    // Move to the next sensor
+    currentSensor = (currentSensor + 1) % NUM_SENSORS;
+  }
   
   currentMicros = millis();
 
@@ -321,6 +352,19 @@ void initWifi(){
   server.begin();
 }
 
+// Function to select a channel on the MUX
+void selectChannel(int channel) {
+  digitalWrite(S0, channel & 1);
+  digitalWrite(S1, (channel >> 1) & 1);
+  digitalWrite(S2, (channel >> 2) & 1);
+}
+
+// Function to read analog values from sensors through the multiplexer
+int readSensor(int channel) {
+  selectChannel(channel);
+  return analogRead(MUX_ADC_PIN);  // Read ADC value
+}
+
 void changeMode(){
   if(mode == 0){
     set_state(fsm_GMS, sm2_scan);
@@ -363,7 +407,7 @@ void controlRobotLFStm() {
     fsm_LF.new_state = sm1_move1; // Rotate to move state
     turnAngle += robot.rel_theta;
     Serial.println(turnAngle);
-  } else if (fsm_LF.state == sm1_move1 && ((!ch1) || (!ch2) || (!ch3) || (!ch4) || (!ch5))) {
+  } else if (fsm_LF.state == sm1_move1 && ((!binaryValues[0]) || (!binaryValues[1]) || (!binaryValues[2]) || (!binaryValues[3]) || (!binaryValues[4]))) {
     fsm_LF.new_state = sm1_turn2; // Resume line-following when the line is detected
     robot.rel_theta = 0;
   } else if(fsm_LF.state == sm1_turn2 && (robot.rel_theta - turnAngle) >= 0){
@@ -377,7 +421,7 @@ void controlRobotLFStm() {
     fsm_LF.tup = fsm_LF.tis;
 
     if (fsm_LF.state == sm1_lineFollowing) {
-      float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
+      float w = robot_controller.followLinePID(binaryValues[0],binaryValues[1],binaryValues[2],binaryValues[3],binaryValues[4]);
       // Slow down when object is detected
       setRobotVW((sensorDist <= 0.2) ? 1.5 : robot_controller.vValues[robot_controller.mode], w);
     } else if (fsm_LF.state == sm1_turn1) {
@@ -412,7 +456,7 @@ void controlRobotGMSStm() {
   int finalY = 4;
 
   // State transitions
-  if(fsm_GMS.state == sm2_scan && ch1+ch2+ch3+ch4+ch5 >= 3 && robot.rel_s >= 0.05){
+  if(fsm_GMS.state == sm2_scan && (binaryValues[0]+binaryValues[1]+binaryValues[2]+binaryValues[3]+binaryValues[4]) >= 3 && robot.rel_s >= 0.05){
     if(x == finalX && y == finalY){
       fsm_GMS.new_state = sm2_stop;
     }else{
@@ -420,13 +464,13 @@ void controlRobotGMSStm() {
       fsm_GMS.new_state = calculateTurnState(currentDirection, nextDirection); // Calculate turn state
       currentDirection = nextDirection; // Update current direction
     }
-  }else if(fsm_GMS.state == sm2_turnRight && (robot.rel_theta <= -(2.5 / 2)) && !ch3){
+  }else if(fsm_GMS.state == sm2_turnRight && (robot.rel_theta <= -(2.5 / 2)) && !binaryValues[2]){
     fsm_GMS.new_state = sm2_lineFollowing;
-  }else if(fsm_GMS.state == sm2_turnLeft && (robot.rel_theta >= (2.5 / 2)) && !ch3){
+  }else if(fsm_GMS.state == sm2_turnLeft && (robot.rel_theta >= (2.5 / 2)) && !binaryValues[2]){
     fsm_GMS.new_state = sm2_lineFollowing;
-  }else if(fsm_GMS.state == sm2_turnBack && (robot.rel_theta >= 2.5) && !ch3){
+  }else if(fsm_GMS.state == sm2_turnBack && (robot.rel_theta >= 2.5) && !binaryValues[2]){
     fsm_GMS.new_state = sm2_lineFollowing;
-  }else if(fsm_GMS.state == sm2_goBack && (ch1+ch2+ch3+ch4+ch5 < 3)){
+  }else if(fsm_GMS.state == sm2_goBack && ((binaryValues[0]+binaryValues[1]+binaryValues[2]+binaryValues[3]+binaryValues[4]) < 3)){
     fsm_GMS.new_state = sm2_scan;
     robot.rel_s = 0;
     robot.rel_theta = 0;
@@ -437,7 +481,7 @@ void controlRobotGMSStm() {
     int ty = y + (currentDirection == UP) - (currentDirection == DOWN);
     objects[ty][tx] = 1;
     robot.rel_theta = 0;
-  }else if(fsm_GMS.state == sm2_lineFollowing && (ch1+ch2+ch3+ch4+ch5 < 3)){
+  }else if(fsm_GMS.state == sm2_lineFollowing && ((binaryValues[0]+binaryValues[1]+binaryValues[2]+binaryValues[3]+binaryValues[4]) < 3)){
     fsm_GMS.new_state = sm2_scan;
     robot.rel_s = 0;
     robot.rel_theta = 0;
@@ -451,10 +495,10 @@ void controlRobotGMSStm() {
   if (fsm_GMS.tis - fsm_GMS.tup > interval) {
     fsm_GMS.tup = fsm_GMS.tis;
     if(fsm_GMS.state == sm2_lineFollowing || fsm_GMS.state == sm2_scan){
-      float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
+      float w = robot_controller.followLinePID(binaryValues[0],binaryValues[1],binaryValues[2],binaryValues[3],binaryValues[4]);
       setRobotVW((sensorDist <= 0.17) ? 1.5 : robot_controller.vValues[robot_controller.mode], w);
     }else if(fsm_GMS.state == sm2_goBack){
-      float w = robot_controller.followLinePID(ch1, ch2, ch3, ch4, ch5);
+      float w = robot_controller.followLinePID(binaryValues[0],binaryValues[1],binaryValues[2],binaryValues[3],binaryValues[4]);
       setRobotVW(-robot_controller.vValues[robot_controller.mode], w);
     }else if(fsm_GMS.state == sm2_turnRight){
       setRobotVW(0, -30);
@@ -493,7 +537,8 @@ int calculateTurnState(int currentDirection, int nextDirection) {
 void displayInfo() {
 
     String line1 = "enc1: " + String(robot.enc1) + ", enc2: " + String(robot.enc2);
-    String line2 = "Channels: " + String(ch1) + String(ch2) + String(ch3) + String(ch4) + String(ch5);
+    String line2 = "Channels: " + String(binaryValues[0]) + String(binaryValues[1]) + String(binaryValues[2]) + String(binaryValues[3]) + String(binaryValues[4]);
+    String line9 = "Channels Values: " + String(sensorValues[0])+ " " + String(sensorValues[1]) + " " + String(sensorValues[2]) + " " + String(sensorValues[3]) + " " + String(sensorValues[4]);
     String line3 = "Dist: " + String(sensorDist, 5) + " m";
     String line4 = "Motor 1: " + String(robot.PWM_1) + ", Motor 2: " + String(robot.PWM_2);
     String line5 = "Battery: " + String(robot.battery_voltage) + " V";
@@ -507,6 +552,7 @@ void displayInfo() {
       Serial.println("Ip address: " + WiFi.localIP().toString());
       Serial.println(line1);
       Serial.println(line2);
+      Serial.println(line9);
       Serial.println(line3);
       Serial.println(line4);
       Serial.println(line5);
