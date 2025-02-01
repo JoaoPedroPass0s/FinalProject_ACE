@@ -40,7 +40,7 @@
 #define NUM_SENSORS 5
 
 // Analog threshold to determine black/white (adjust based on your sensors)
-#define THRESHOLD 1000  // Experiment and adjust
+#define THRESHOLD 2500  // Experiment and adjust
 
 #define digitalWriteFast(pin, val)  (val ? sio_hw->gpio_set = (1 << pin) : sio_hw->gpio_clr = (1 << pin))
 #define digitalReadFast(pin)        (((1 << pin) & sio_hw->gpio_in) >> pin)
