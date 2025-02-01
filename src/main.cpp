@@ -134,6 +134,9 @@ static int currentSensor = 0;
 static unsigned long lastReadTime = 0;
 const unsigned long sensorReadInterval = 2;  // Adjust based on response time
 
+static unsigned long lastTOFSensorRead = 0;
+static unsigned long lastPrintTime = 0;
+
 int enc1, enc2;
 
 volatile int encoder1_pos = 0;
@@ -299,7 +302,8 @@ void loop() {
 
   displayInfo();
 
-  if(currentMicros % interval == 0){
+  if(currentMicros - lastTOFSensorRead >= interval){
+    lastTOFSensorRead = currentMicros;
     if (tof.readRangeAvailable()) {
         float currentReading = tof.readRangeMillimeters() * 1e-3;
 
@@ -396,18 +400,19 @@ void controlRobotLFStm() {
   if ((fsm_LF.state == sm1_lineFollowing || fsm_LF.state == sm1_move1 || fsm_LF.state == sm1_turn2) && sensorDist <= 0.1) {
     fsm_LF.new_state = sm1_stop; // Start turning
   }else if(fsm_LF.state == sm1_stop && fsm_LF.tis - fsm_LF.tes > 100){
-    a = sensorDist + 0.01;
+    a = sensorDist + 0.005;
     robot.rel_theta = 0;
     fsm_LF.new_state = sm1_turn1; // Turn in place
   } else if (fsm_LF.state == sm1_turn1 && sensorDist > 0.20) {
     turnAngle = robot.rel_theta;
     fsm_LF.new_state = sm1_adjust1; // Rotate to adjust state
     robot.rel_theta = 0;
-  } else if (fsm_LF.state == sm1_adjust1 && robot.rel_theta <= -0.7) {
+  } else if (fsm_LF.state == sm1_adjust1 && robot.rel_theta <= -0.8) {
     fsm_LF.new_state = sm1_move1; // Rotate to move state
     turnAngle += robot.rel_theta;
     Serial.println(turnAngle);
-  } else if (fsm_LF.state == sm1_move1 && ((!binaryValues[0]) || (!binaryValues[1]) || (!binaryValues[2]) || (!binaryValues[3]) || (!binaryValues[4]))) {
+    robot.rel_theta = 0;
+  } else if (fsm_LF.state == sm1_move1 && ((abs(robot.rel_theta) - abs((turnAngle * 2) - 0.1)) >= 0) && ((!binaryValues[0]) || (!binaryValues[1]) || (!binaryValues[2]) || (!binaryValues[3]) || (!binaryValues[4]))) {
     fsm_LF.new_state = sm1_turn2; // Resume line-following when the line is detected
     robot.rel_theta = 0;
   } else if(fsm_LF.state == sm1_turn2 && (robot.rel_theta - turnAngle) >= 0){
@@ -425,13 +430,16 @@ void controlRobotLFStm() {
       // Slow down when object is detected
       setRobotVW((sensorDist <= 0.2) ? 1.5 : robot_controller.vValues[robot_controller.mode], w);
     } else if (fsm_LF.state == sm1_turn1) {
+      if(!binaryValues[2]){
+        robot.rel_theta = 0;
+      }
       setRobotVW(0,-30); // Turn in place
     } else if (fsm_LF.state == sm1_adjust1) {
       setRobotVW(0,-30); // Turn in place
     } else if (fsm_LF.state == sm1_move1) {
       float b = (a * sin(abs(turnAngle))) / (sin((PI/2) - abs(turnAngle)));
-      float w = robot_controller.followEllipse(a, b, turnAngle, 2.0);
-      setRobotVW(2.0, w);
+      float w = robot_controller.followEllipse(a, b, turnAngle, robot_controller.vValues[robot_controller.mode]);
+      setRobotVW(robot_controller.vValues[robot_controller.mode], w);
     }else if(fsm_LF.state == sm1_turn2){
       setRobotVW(0, -30); // Turn in place
     }else if(fsm_LF.state == sm1_stop){
@@ -548,7 +556,8 @@ void displayInfo() {
     + "," + String(robot_controller.kdValues[robot_controller.mode]) ;
     String line8 = "Error: " + String(robot_controller.previous_error);
 
-    if (currentMicros % 200 == 0) {
+    if (currentMicros - lastPrintTime >= 200) {
+      lastPrintTime = currentMicros;
       Serial.println("Ip address: " + WiFi.localIP().toString());
       Serial.println(line1);
       Serial.println(line2);
@@ -559,9 +568,6 @@ void displayInfo() {
       Serial.println(line6);
       Serial.println(line7);
       Serial.println(line8);
-    }  
-
-    if(currentMicros % 200 == 0){
       currentClient.println(line1);
       currentClient.println(line2);
       currentClient.println(line3);
