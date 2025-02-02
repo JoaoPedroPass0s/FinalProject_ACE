@@ -562,7 +562,6 @@ void displayInfo() {
       currentClient.println(line4);
       currentClient.println(line5);
       currentClient.println(line6);
-      currentClient.println(line7);
       currentClient.println(line8);
     }
 }
